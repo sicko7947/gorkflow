@@ -4,7 +4,7 @@ This directory contains complete, runnable examples demonstrating various featur
 
 ## Available Examples
 
-### 1. [Simple Math](./simple_math/)
+### 1. [Sequential](./sequential/)
 **Demonstrates**: Basic sequential workflow execution
 
 A straightforward example showing:
@@ -16,11 +16,25 @@ A straightforward example showing:
 **Workflow**: Add two numbers → Multiply by factor → Format result
 
 ```bash
-cd simple_math
-cat README.md  # Full documentation
+cd sequential
+go run main/main.go
 ```
 
-### 2. [Conditional Execution](./conditional/)
+### 2. [Parallel](./parallel/)
+**Demonstrates**: Parallel workflow execution
+
+Shows how to use the `Parallel` builder API:
+- Parallel step execution
+- Aggregating results
+
+**Workflow**: Add two numbers AND Multiply result (in parallel) -> Format result
+
+```bash
+cd parallel
+go run main/main.go
+```
+
+### 3. [Conditional Execution](./conditional/)
 **Demonstrates**: Runtime conditional step execution
 
 Shows how to use the `ThenStepIf` builder API for conditional execution:
@@ -33,41 +47,13 @@ Shows how to use the `ThenStepIf` builder API for conditional execution:
 
 ```bash
 cd conditional
-cat README.md  # Full documentation
+go run main/main.go
 ```
 
 ## Running Examples
 
-Each example is a standalone Go package that can be imported and used:
-
-```go
-import (
-    "context"
-    "github.com/sicko7947/gorkflow/engine"
-    "github.com/sicko7947/gorkflow/store"
-    "github.com/sicko7947/gorkflow/example/simple_math"
-    "github.com/sicko7947/gorkflow/example/conditional"
-)
-
-func main() {
-    // Create engine (uses defaults: stdout logger, DefaultEngineConfig)
-    eng := engine.NewEngine(store.NewMemoryStore())
-
-    // Run simple math workflow
-    mathWf, _ := simple_math.NewSimpleMathWorkflow()
-    mathInput := simple_math.WorkflowInput{Val1: 10, Val2: 5, Mult: 2}
-    runID1, _ := eng.StartWorkflow(context.Background(), mathWf, mathInput)
-
-    // Run conditional workflow
-    condWf, _ := conditional.NewConditionalWorkflow()
-    condInput := conditional.ConditionalInput{
-        Value:            10,
-        EnableDoubling:   true,
-        EnableFormatting: true,
-    }
-    runID2, _ := eng.StartWorkflow(context.Background(), condWf, condInput)
-}
-```
+Each example is a standalone Go package that can be run directly.
+They start a Fiber HTTP server.
 
 ## Example Structure
 
@@ -76,37 +62,20 @@ Each example follows this structure:
 ```
 example/
 ├── <example-name>/
-│   ├── README.md       # Detailed documentation
+│   ├── main/
+│   │   └── main.go     # Entry point, HTTP server
 │   ├── types.go        # Input/output type definitions
 │   ├── steps.go        # Step implementations
-│   ├── workflow.go     # Workflow builder function
-│   └── orchestrator.go # Workflow orchestrator (encapsulates engine + workflow)
+│   └── workflow.go     # Workflow builder function
 └── README.md           # This file - examples overview
 ```
-
-Each example includes its own orchestrator that provides a clean API for starting workflows, getting status, and cancelling executions.
 
 ## Learning Path
 
 **Recommended order for learning:**
 
-1. **simple_math/** - Start here to understand the basics
-2. **conditional/** - Learn conditional execution patterns
+1. **sequential/** - Start here to understand the basics
+2. **parallel/** - Learn parallel execution
+3. **conditional/** - Learn conditional execution patterns
 
 Each example builds on concepts from the previous ones.
-
-## Creating Your Own Example
-
-To add a new example:
-
-1. Create a new directory: `example/my_example/`
-2. Add your workflow implementation files
-3. Create a `README.md` documenting the example
-4. Update this file with a link to your example
-
-## Support
-
-For questions about examples or the gorkflow library:
-- Check the main [README](../README.md)
-- Review example READMEs for specific features
-- Open an issue on GitHub

@@ -1,4 +1,4 @@
-package simple_math
+package parallel
 
 // WorkflowInput is the initial input for the workflow
 type WorkflowInput struct {

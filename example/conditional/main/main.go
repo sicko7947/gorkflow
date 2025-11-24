@@ -12,7 +12,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/sicko7947/gorkflow"
 	"github.com/sicko7947/gorkflow/engine"
-	"github.com/sicko7947/gorkflow/example/simple_math"
+	"github.com/sicko7947/gorkflow/example/conditional"
 	"github.com/sicko7947/gorkflow/store"
 )
 
@@ -32,9 +32,9 @@ type ReadableStepExecution struct {
 // WorkflowStatus represents the current status of a workflow run
 type WorkflowStatus struct {
 	*gorkflow.WorkflowRun
-	Input          json.RawMessage           `json:"input,omitempty"`
-	StepExecutions []*ReadableStepExecution  `json:"stepExecutions,omitempty"`
-	Output         *simple_math.FormatOutput `json:"output,omitempty"`
+	Input          json.RawMessage                      `json:"input,omitempty"`
+	StepExecutions []*ReadableStepExecution             `json:"stepExecutions,omitempty"`
+	Output         *conditional.ConditionalFormatOutput `json:"output,omitempty"`
 }
 
 // initializeApp performs common initialization for both deployment modes
@@ -44,10 +44,10 @@ func initializeApp() {
 	// Initialize workflow store
 	workflowStore := store.NewMemoryStore()
 
-	// Initialize simple math workflow
-	workflow, err = simple_math.NewSimpleMathWorkflow()
+	// Initialize conditional workflow
+	workflow, err = conditional.NewConditionalWorkflow()
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to create simple math workflow")
+		log.Fatal().Err(err).Msg("Failed to create conditional workflow")
 	}
 
 	log.Logger = log.Output(zerolog.ConsoleWriter{
@@ -74,7 +74,7 @@ func registerRoutes(app *fiber.App) {
 	app.Get("/health", func(c fiber.Ctx) error {
 		return c.JSON(fiber.Map{
 			"status":  "healthy",
-			"service": "tendor-email-agent-simple-math",
+			"service": "conditional-workflow-server",
 			"version": "1.0.0",
 		})
 	})
@@ -82,13 +82,13 @@ func registerRoutes(app *fiber.App) {
 	// Root endpoint
 	app.Get("/", func(c fiber.Ctx) error {
 		return c.JSON(fiber.Map{
-			"service":     "Tendor Email Agent - Simple Math Workflow Server",
+			"service":     "Conditional Workflow Server",
 			"version":     "1.0.0",
 			"framework":   "New Type-Safe Workflow Engine",
-			"description": "Simple Math Workflow Example",
+			"description": "Conditional Workflow Example",
 			"endpoints": fiber.Map{
 				"health":         "GET /health",
-				"startWorkflow":  "POST /api/v1/workflows/simple-math",
+				"startWorkflow":  "POST /api/v1/workflows/conditional",
 				"getStatus":      "GET /api/v1/workflows/:runId",
 				"cancelWorkflow": "POST /api/v1/workflows/:runId/cancel",
 			},
@@ -101,15 +101,15 @@ func registerRoutes(app *fiber.App) {
 	// Workflow endpoints
 	workflows := v1.Group("/workflows")
 
-	// Simple math workflow endpoints
-	workflows.Post("/simple-math", handleStartWorkflow)
+	// Conditional workflow endpoints
+	workflows.Post("/conditional", handleStartWorkflow)
 	workflows.Get("/:runId", handleGetStatus)
 	workflows.Post("/:runId/cancel", handleCancelWorkflow)
 }
 
-// handleStartWorkflow starts a new simple math workflow
+// handleStartWorkflow starts a new conditional workflow
 func handleStartWorkflow(c fiber.Ctx) error {
-	var input simple_math.WorkflowInput
+	var input conditional.ConditionalInput
 	if err := c.Bind().JSON(&input); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid request body",
@@ -122,7 +122,7 @@ func handleStartWorkflow(c fiber.Ctx) error {
 		workflow,
 		input,
 		gorkflow.WithTags(map[string]string{
-			"type": "simple_math",
+			"type": "conditional",
 		}),
 	)
 
@@ -186,7 +186,7 @@ func handleGetStatus(c fiber.Ctx) error {
 
 	// If completed, parse output
 	if run.Status == gorkflow.RunStatusCompleted && len(run.Output) > 0 {
-		var output simple_math.FormatOutput
+		var output conditional.ConditionalFormatOutput
 		if err := json.Unmarshal(run.Output, &output); err != nil {
 			log.Warn().
 				Err(err).

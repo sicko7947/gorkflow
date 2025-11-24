@@ -1,154 +1,90 @@
-# Conditional Execution Example
+# Conditional Workflow Example
 
-Demonstrates how to use the `ThenStepIf` builder API for conditional step execution based on runtime state.
+This example demonstrates how to use conditional logic within a workflow using the `ThenStepIf` builder method.
 
 ## Overview
 
-This example shows:
-- **Builder-level conditional execution** using `ThenStepIf()`
-- Condition evaluation from workflow state
-- Default values when steps are skipped
-- Runtime decision-making in workflows
+The workflow processes an input value and optionally performs operations based on flags provided in the input.
 
-## Workflow Steps
+It showcases:
+- **Conditional Execution**: Using `ThenStepIf` to execute steps only when a condition is met.
+- **State Management**: Storing flags in the workflow context state for use in conditions.
+- **Default Values**: Providing default output values when a step is skipped.
 
-1. **Setup** - Extracts input flags and stores them in workflow state
-2. **Double** (Conditional) - Doubles the value if `EnableDoubling` is true
-3. **Format** (Conditional) - Formats the result if `EnableFormatting` is true
+## Workflow Structure
 
-## Usage
+1.  **Setup Step** (`setup`):
+    -   **Input**: `ConditionalInput` (Value, EnableDoubling, EnableFormatting)
+    -   **Action**: Extracts `EnableDoubling` and `EnableFormatting` flags and stores them in the workflow state (`ctx.State`). Passes `Value` to the next step.
+    -   **Output**: `DoubleInput` (Value)
 
-```go
-import (
-    "context"
-    "github.com/sicko7947/gorkflow/engine"
-    "github.com/sicko7947/gorkflow/store"
-    "github.com/sicko7947/gorkflow/example/conditional"
-)
+2.  **Double Step** (`double`) - *Conditional*:
+    -   **Condition**: Checks if `enable_doubling` is true in state.
+    -   **Action**: Multiples the value by 2.
+    -   **Default**: If skipped, returns a default object with `Value: 0` and `Doubled: false`.
+    -   **Output**: `DoubleOutput` (Value, Doubled, Message)
 
-func main() {
-    // Create engine
-    eng := engine.NewEngine(store.NewMemoryStore())
+3.  **Format Step** (`conditional_format`) - *Conditional*:
+    -   **Condition**: Checks if `enable_formatting` is true in state.
+    -   **Action**: Formats the result into a string.
+    -   **Output**: `ConditionalFormatOutput` (Value, Formatted, Doubled)
 
-    // Create conditional workflow
-    wf, _ := conditional.NewConditionalWorkflow()
+## Data Flow
 
-    // Example 1: Enable both steps
-    input1 := conditional.ConditionalInput{
-        Value:            10,
-        EnableDoubling:   true,
-        EnableFormatting: true,
-    }
-    runID1, _ := eng.StartWorkflow(context.Background(), wf, input1)
-    // Result: Value doubled to 20, formatted output
-
-    // Example 2: Skip doubling
-    input2 := conditional.ConditionalInput{
-        Value:            10,
-        EnableDoubling:   false,  // Step skipped!
-        EnableFormatting: true,
-    }
-    runID2, _ := eng.StartWorkflow(context.Background(), wf, input2)
-    // Result: Default output used, formatted
-
-    // Example 3: Skip both conditional steps
-    input3 := conditional.ConditionalInput{
-        Value:            10,
-        EnableDoubling:   false,
-        EnableFormatting: false,
-    }
-    runID3, _ := eng.StartWorkflow(context.Background(), wf, input3)
-    // Result: Both steps skipped, default values used
-}
+```mermaid
+graph TD
+    Input[ConditionalInput] --> Setup[Setup Step]
+    Setup --> CheckDouble{Enable Doubling?}
+    CheckDouble -->|Yes| Double[Double Step]
+    CheckDouble -->|No| DefaultDouble[Default Output]
+    Double --> CheckFormat{Enable Formatting?}
+    DefaultDouble --> CheckFormat
+    CheckFormat -->|Yes| Format[Format Step]
+    CheckFormat -->|No| End[End]
+    Format --> Output[ConditionalFormatOutput]
 ```
 
-## How It Works
+## Running the Example
 
-### 1. State-Based Conditions
+1.  **Start the Server**:
+    ```bash
+    go run main/main.go
+    ```
 
-The setup step stores flags in workflow state:
+2.  **Trigger the Workflow (With Doubling)**:
+    ```bash
+    curl -X POST http://localhost:3000/api/v1/workflows/conditional \
+      -H "Content-Type: application/json" \
+      -d '{"value": 10, "enable_doubling": true, "enable_formatting": true}'
+    ```
+
+3.  **Trigger the Workflow (Without Doubling)**:
+    ```bash
+    curl -X POST http://localhost:3000/api/v1/workflows/conditional \
+      -H "Content-Type: application/json" \
+      -d '{"value": 10, "enable_doubling": false, "enable_formatting": true}'
+    ```
+
+## Key Code Concepts
+
+### Conditional Builder
+The `ThenStepIf` method takes the step, a condition function, and a default value.
+
+```go
+// Define condition
+shouldDouble := func(ctx *gorkflow.StepContext) (bool, error) {
+    var enable bool
+    ctx.State.Get("enable_doubling", &enable)
+    return enable, nil
+}
+
+// Add to workflow
+builder.ThenStepIf(NewDoubleStep(), shouldDouble, doubleDefault)
+```
+
+### Using State
+The `SetupStep` puts data into the context state, which is accessible by condition functions (and other steps).
+
 ```go
 ctx.State.Set("enable_doubling", input.EnableDoubling)
-ctx.State.Set("enable_formatting", input.EnableFormatting)
 ```
-
-### 2. Condition Functions
-
-Conditions read from state:
-```go
-shouldDouble := func(ctx *workflow.StepContext) (bool, error) {
-    var enableDoubling bool
-    ctx.State.Get("enable_doubling", &enableDoubling)
-    return enableDoubling, nil
-}
-```
-
-### 3. Builder-Level API
-
-Use `ThenStepIf` for clean conditional step addition:
-```go
-builder.NewWorkflow("example", "Example").
-    ThenStep(setupStep).
-    ThenStepIf(doubleStep, shouldDouble, defaultValue).  // ← Conditional!
-    ThenStepIf(formatStep, shouldFormat, nil).
-    Build()
-```
-
-## Key Concepts
-
-- **Conditions** evaluate at runtime before step execution
-- **Default values** are used when conditions return `false`
-- **State access** allows conditions to make decisions based on workflow data
-- **Builder API** (`ThenStepIf`) provides clean syntax for conditional steps
-
-## Using the Orchestrator
-
-For a structured approach, use the included orchestrator:
-
-```go
-import (
-    "context"
-    "github.com/rs/zerolog"
-    "github.com/sicko7947/gorkflow/engine"
-    "github.com/sicko7947/gorkflow/store"
-    "github.com/sicko7947/gorkflow/example/conditional"
-)
-
-func main() {
-    logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
-    store := store.NewMemoryStore()
-
-    // Create orchestrator
-    orch, _ := conditional.NewOrchestrator(
-        store,
-        logger,
-        engine.DefaultEngineConfig,
-    )
-
-    // Start workflow with conditional flags
-    input := conditional.ConditionalInput{
-        Value:            10,
-        EnableDoubling:   true,
-        EnableFormatting: false,
-    }
-    runID, _ := orch.StartWorkflow(context.Background(), input)
-
-    // Get status
-    status, _ := orch.GetWorkflowStatus(context.Background(), runID)
-    fmt.Printf("Status: %s, Output: %+v\n", status.Status, status.Output)
-}
-```
-
-## Alternative Approach
-
-For type-safe default values, you can also use the step-level API:
-
-```go
-baseStep := workflow.NewStep("process", "Process", handler)
-defaultOutput := &ProcessOutput{Status: "skipped"}
-conditionalStep := workflow.NewConditionalStep(baseStep, condition, defaultOutput)
-
-builder.ThenStep(conditionalStep)
-```
-
-Both approaches are equivalent - choose based on your needs!

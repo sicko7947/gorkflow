@@ -1,4 +1,4 @@
-package simple_math
+package parallel
 
 import (
 	"fmt"
@@ -17,8 +17,13 @@ func NewSimpleMathWorkflow() (*gorkflow.Workflow, error) {
 			TimeoutSeconds: 3,
 		}).
 		Sequence(
+			NewStartStep(),
+		).
+		Parallel(
 			NewAddStep(),
 			NewMultiplyStep(),
+		).
+		Sequence(
 			NewFormatStep(),
 		).
 		Build()

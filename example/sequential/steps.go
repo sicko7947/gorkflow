@@ -1,4 +1,4 @@
-package simple_math
+package sequential
 
 import (
 	"fmt"
