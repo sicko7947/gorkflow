@@ -7,7 +7,6 @@ import (
 	"github.com/sicko7947/gorkflow/builder"
 )
 
-// NewSimpleMathWorkflow constructs the simple math workflow
 func NewSimpleMathWorkflow() (*gorkflow.Workflow, error) {
 	wf, err := builder.NewWorkflow("simple_math", "Simple Math Workflow").
 		WithDescription("A simple workflow to test the engine").
