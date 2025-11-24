@@ -3,7 +3,7 @@ package builder
 import (
 	"fmt"
 
-	"github.com/sicko7947/workflow-go"
+	workflow "github.com/sicko7947/gorkflow"
 )
 
 // WorkflowBuilder provides a fluent API for building workflows
@@ -109,12 +109,13 @@ func (b *WorkflowBuilder) Sequence(steps ...workflow.StepExecutor) *WorkflowBuil
 // If false, defaultValue is used as output (pass nil for zero value)
 //
 // Example:
-//   condition := func(ctx *workflow.StepContext) (bool, error) {
-//       var shouldProcess bool
-//       ctx.State.Get("should_process", &shouldProcess)
-//       return shouldProcess, nil
-//   }
-//   builder.ThenStepIf(processStep, condition, nil)
+//
+//	condition := func(ctx *workflow.StepContext) (bool, error) {
+//	    var shouldProcess bool
+//	    ctx.State.Get("should_process", &shouldProcess)
+//	    return shouldProcess, nil
+//	}
+//	builder.ThenStepIf(processStep, condition, nil)
 func (b *WorkflowBuilder) ThenStepIf(step workflow.StepExecutor, condition workflow.Condition, defaultValue any) *WorkflowBuilder {
 	// Wrap the step in a conditional wrapper
 	wrappedStep := workflow.WrapStepWithCondition(step, condition, defaultValue)

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/sicko7947/workflow-go"
+	"github.com/sicko7947/gorkflow"
 )
 
 // MemoryStore implements workflow.WorkflowStore using in-memory storage (for testing)

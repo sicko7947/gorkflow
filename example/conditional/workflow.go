@@ -3,8 +3,8 @@ package conditional
 import (
 	"fmt"
 
-	workflow "github.com/sicko7947/workflow-go"
-	"github.com/sicko7947/workflow-go/builder"
+	workflow "github.com/sicko7947/gorkflow"
+	"github.com/sicko7947/gorkflow/builder"
 )
 
 // NewConditionalWorkflow demonstrates conditional step execution using ThenStepIf

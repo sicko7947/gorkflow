@@ -3,7 +3,7 @@ package builder
 import (
 	"fmt"
 
-	"github.com/sicko7947/workflow-go"
+	workflow "github.com/sicko7947/gorkflow"
 )
 
 // ValidateWorkflow performs comprehensive validation on a workflow

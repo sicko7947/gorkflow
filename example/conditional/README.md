@@ -21,9 +21,9 @@ This example shows:
 ```go
 import (
     "context"
-    "github.com/sicko7947/workflow-go/engine"
-    "github.com/sicko7947/workflow-go/store"
-    "github.com/sicko7947/workflow-go/example/conditional"
+    "github.com/sicko7947/gorkflow/engine"
+    "github.com/sicko7947/gorkflow/store"
+    "github.com/sicko7947/gorkflow/example/conditional"
 )
 
 func main() {
@@ -109,9 +109,9 @@ For a structured approach, use the included orchestrator:
 import (
     "context"
     "github.com/rs/zerolog"
-    "github.com/sicko7947/workflow-go/engine"
-    "github.com/sicko7947/workflow-go/store"
-    "github.com/sicko7947/workflow-go/example/conditional"
+    "github.com/sicko7947/gorkflow/engine"
+    "github.com/sicko7947/gorkflow/store"
+    "github.com/sicko7947/gorkflow/example/conditional"
 )
 
 func main() {

@@ -3,7 +3,7 @@ package conditional
 import (
 	"fmt"
 
-	workflow "github.com/sicko7947/workflow-go"
+	workflow "github.com/sicko7947/gorkflow"
 )
 
 func NewSetupStep() *workflow.Step[ConditionalInput, DoubleInput] {

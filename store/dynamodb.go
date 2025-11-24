@@ -9,7 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/sicko7947/workflow-go"
+	"github.com/sicko7947/gorkflow"
 )
 
 // DynamoDBStore implements workflow.WorkflowStore using AWS DynamoDB

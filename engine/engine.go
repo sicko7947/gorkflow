@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"github.com/sicko7947/workflow-go"
+	workflow "github.com/sicko7947/gorkflow"
 )
 
 // Engine orchestrates workflow execution

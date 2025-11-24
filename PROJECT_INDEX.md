@@ -1,7 +1,7 @@
-# Project Index: workflow-go
+# Project Index: gorkflow
 
 **Generated:** 2025-11-24
-**Module:** github.com/sicko7947/workflow-go
+**Module:** github.com/sicko7947/gorkflow
 **Go Version:** 1.25.3
 
 ---
@@ -9,7 +9,7 @@
 ## 📁 Project Structure
 
 ```
-workflow-go/
+gorkflow/
 ├── builder/              # Fluent workflow builder API
 │   ├── builder.go
 │   ├── builder_test.go
@@ -321,16 +321,16 @@ go test -tags=integration ./store/...
 
 ### 1. Install
 ```bash
-go get github.com/sicko7947/workflow-go
+go get github.com/sicko7947/gorkflow
 ```
 
 ### 2. Create a Simple Workflow
 ```go
 import (
-    workflow "github.com/sicko7947/workflow-go"
-    "github.com/sicko7947/workflow-go/builder"
-    "github.com/sicko7947/workflow-go/engine"
-    "github.com/sicko7947/workflow-go/store"
+    workflow "github.com/sicko7947/gorkflow"
+    "github.com/sicko7947/gorkflow/builder"
+    "github.com/sicko7947/gorkflow/engine"
+    "github.com/sicko7947/gorkflow/store"
 )
 
 // Define step

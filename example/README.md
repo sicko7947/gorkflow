@@ -1,6 +1,6 @@
-# Workflow-Go Examples
+# gorkflow Examples
 
-This directory contains complete, runnable examples demonstrating various features of the Workflow-Go engine.
+This directory contains complete, runnable examples demonstrating various features of the gorkflow engine.
 
 ## Available Examples
 
@@ -43,10 +43,10 @@ Each example is a standalone Go package that can be imported and used:
 ```go
 import (
     "context"
-    "github.com/sicko7947/workflow-go/engine"
-    "github.com/sicko7947/workflow-go/store"
-    "github.com/sicko7947/workflow-go/example/simple_math"
-    "github.com/sicko7947/workflow-go/example/conditional"
+    "github.com/sicko7947/gorkflow/engine"
+    "github.com/sicko7947/gorkflow/store"
+    "github.com/sicko7947/gorkflow/example/simple_math"
+    "github.com/sicko7947/gorkflow/example/conditional"
 )
 
 func main() {
@@ -106,7 +106,7 @@ To add a new example:
 
 ## Support
 
-For questions about examples or the Workflow-Go library:
+For questions about examples or the gorkflow library:
 - Check the main [README](../README.md)
 - Review example READMEs for specific features
 - Open an issue on GitHub

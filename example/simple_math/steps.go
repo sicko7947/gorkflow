@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	workflow "github.com/sicko7947/workflow-go"
+	workflow "github.com/sicko7947/gorkflow"
 )
 
 func NewAddStep() *workflow.Step[WorkflowInput, AddOutput] {

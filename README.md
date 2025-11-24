@@ -1,4 +1,4 @@
-# Workflow Go
+# Gorkflow
 
 A powerful, type-safe, and flexible workflow orchestration engine for Go with built-in state persistence, retries, and DAG-based execution.
 
@@ -20,7 +20,7 @@ A powerful, type-safe, and flexible workflow orchestration engine for Go with bu
 ## Installation
 
 ```bash
-go get github.com/sicko7947/workflow-go
+go get github.com/sicko7947/gorkflow
 ```
 
 ## Quick Start
@@ -32,7 +32,7 @@ package main
 
 import (
     "fmt"
-    workflow "github.com/sicko7947/workflow-go"
+    workflow "github.com/sicko7947/gorkflow"
 )
 
 // Input for the workflow
@@ -89,7 +89,7 @@ func NewFormatStep() *workflow.Step[SumOutput, ResultOutput] {
 
 ```go
 import (
-    "github.com/sicko7947/workflow-go/builder"
+    "github.com/sicko7947/gorkflow/builder"
 )
 
 func NewCalculationWorkflow() (*workflow.Workflow, error) {
@@ -121,8 +121,8 @@ func NewCalculationWorkflow() (*workflow.Workflow, error) {
 import (
     "context"
     "github.com/rs/zerolog"
-    "github.com/sicko7947/workflow-go/engine"
-    "github.com/sicko7947/workflow-go/store"
+    "github.com/sicko7947/gorkflow/engine"
+    "github.com/sicko7947/gorkflow/store"
 )
 
 func main() {
@@ -311,7 +311,7 @@ Persistent storage using AWS DynamoDB:
 
 ```go
 import (
-    "github.com/sicko7947/workflow-go/store"
+    "github.com/sicko7947/gorkflow/store"
     "github.com/aws/aws-sdk-go-v2/config"
     "github.com/aws/aws-sdk-go-v2/service/dynamodb"
 )
@@ -366,7 +366,7 @@ store := store.NewMemoryStore()
 ## Package Structure
 
 ```
-workflow-go/
+gorkflow/
 ├── builder/          # Fluent API for building workflows
 │   ├── builder.go    # WorkflowBuilder implementation
 │   ├── options.go    # Builder options

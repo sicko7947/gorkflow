@@ -1,6 +1,6 @@
 package builder
 
-import "github.com/sicko7947/workflow-go"
+import workflow "github.com/sicko7947/gorkflow"
 
 // WorkflowOption is a functional option for configuring workflows
 type WorkflowOption func(*workflow.Workflow)

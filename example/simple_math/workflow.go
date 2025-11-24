@@ -3,8 +3,8 @@ package simple_math
 import (
 	"fmt"
 
-	workflow "github.com/sicko7947/workflow-go"
-	"github.com/sicko7947/workflow-go/builder"
+	workflow "github.com/sicko7947/gorkflow"
+	"github.com/sicko7947/gorkflow/builder"
 )
 
 // NewSimpleMathWorkflow constructs the simple math workflow

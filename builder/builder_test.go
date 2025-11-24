@@ -3,7 +3,7 @@ package builder
 import (
 	"testing"
 
-	"github.com/sicko7947/workflow-go"
+	workflow "github.com/sicko7947/gorkflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

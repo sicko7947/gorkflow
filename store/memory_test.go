@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sicko7947/workflow-go"
+	"github.com/sicko7947/gorkflow"
 )
 
 func TestNewMemoryStore(t *testing.T) {

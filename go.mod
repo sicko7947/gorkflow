@@ -1,4 +1,4 @@
-module github.com/sicko7947/workflow-go
+module github.com/sicko7947/gorkflow
 
 go 1.25.3
 
@@ -9,7 +9,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.53.1
 	github.com/google/uuid v1.6.0
 	github.com/rs/zerolog v1.34.0
-	github.com/sicko7947/tendor-workflow-go v0.1.0
 	github.com/stretchr/testify v1.11.1
 )
 

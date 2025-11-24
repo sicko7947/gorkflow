@@ -3,7 +3,7 @@ package engine
 import (
 	"fmt"
 
-	"github.com/sicko7947/workflow-go"
+	workflow "github.com/sicko7947/gorkflow"
 )
 
 // GraphTraverser handles traversal of the execution graph

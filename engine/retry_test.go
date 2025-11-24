@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sicko7947/workflow-go"
-	"github.com/sicko7947/workflow-go/builder"
+	workflow "github.com/sicko7947/gorkflow"
+	"github.com/sicko7947/gorkflow/builder"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

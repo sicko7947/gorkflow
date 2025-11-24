@@ -6,8 +6,8 @@ import (
 	"fmt"
 
 	"github.com/rs/zerolog"
-	workflow "github.com/sicko7947/workflow-go"
-	"github.com/sicko7947/workflow-go/engine"
+	workflow "github.com/sicko7947/gorkflow"
+	"github.com/sicko7947/gorkflow/engine"
 )
 
 // Orchestrator handles the execution of conditional workflows

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/sicko7947/workflow-go"
+	workflow "github.com/sicko7947/gorkflow"
 )
 
 // StepExecutionResult holds the result of a step execution
