@@ -45,11 +45,7 @@ func (e *Engine) executeStep(
 	}
 
 	// Build step context
-	stepLogger := e.logger.With().
-		Str("run_id", run.RunID).
-		Str("step_id", step.GetID()).
-		Str("step_name", step.GetName()).
-		Logger()
+	stepLogger := gorkflow.StepLogger(e.logger, step.GetID(), step.GetName(), 0).With().Str("run_id", run.RunID).Logger()
 
 	stepCtx := &gorkflow.StepContext{
 		Context: ctx,
@@ -70,19 +66,20 @@ func (e *Engine) executeStep(
 		stepCtx.Attempt = attempt
 
 		if attempt > 0 {
-			stepLogger.Warn().Int("attempt", attempt).Msg("Retrying step")
+			// Apply backoff
+			delay := calculateBackoff(config.RetryDelayMs, attempt, string(config.RetryBackoff))
+
+			gorkflow.LogStepRetrying(e.logger, run.RunID, step.GetID(), attempt, delay)
+
 			stepExec.Status = gorkflow.StepStatusRetrying
 			stepExec.Attempt = attempt
 			stepExec.UpdatedAt = time.Now()
 
 			if err := e.store.UpdateStepExecution(ctx, stepExec); err != nil {
-				e.logger.Error().Err(err).Msg("Failed to update step execution during retry")
+				gorkflow.LogPersistenceError(e.logger, run.RunID, "update_step_execution_retry", err)
 			}
 
-			// Apply backoff
-			delay := calculateBackoff(config.RetryDelayMs, attempt, string(config.RetryBackoff))
 			if delay > 0 {
-				stepLogger.Debug().Dur("delay", delay).Msg("Applying backoff delay")
 				time.Sleep(delay)
 			}
 		}
@@ -95,7 +92,7 @@ func (e *Engine) executeStep(
 		stepExec.UpdatedAt = now
 
 		if err := e.store.UpdateStepExecution(ctx, stepExec); err != nil {
-			e.logger.Error().Err(err).Msg("Failed to update step execution to running")
+			gorkflow.LogPersistenceError(e.logger, run.RunID, "update_step_execution_running", err)
 		}
 
 		// Execute with timeout
@@ -132,17 +129,14 @@ func (e *Engine) executeStep(
 			stepExec.UpdatedAt = completedAt
 
 			if err := e.store.UpdateStepExecution(ctx, stepExec); err != nil {
-				e.logger.Error().Err(err).Msg("Failed to update step execution on success")
+				gorkflow.LogPersistenceError(e.logger, run.RunID, "update_step_execution_success", err)
 			}
 
-			stepLogger.Info().
-				Int64("duration_ms", duration.Milliseconds()).
-				Int("attempts", attemptsMade).
-				Msg("Step completed successfully")
+			gorkflow.LogStepCompleted(e.logger, run.RunID, step.GetID(), duration.Milliseconds(), attemptsMade)
 
 			// Save output for downstream steps
 			if err := e.store.SaveStepOutput(ctx, run.RunID, step.GetID(), outputBytes); err != nil {
-				e.logger.Error().Err(err).Msg("Failed to save step output")
+				gorkflow.LogPersistenceError(e.logger, run.RunID, "save_step_output", err)
 			}
 
 			return &StepExecutionResult{
@@ -162,11 +156,7 @@ func (e *Engine) executeStep(
 				Msg("Step execution timed out")
 		}
 
-		stepLogger.Error().
-			Err(lastErr).
-			Int("attempt", attempt).
-			Int64("duration_ms", duration.Milliseconds()).
-			Msg("Step execution failed")
+		gorkflow.LogStepFailed(e.logger, run.RunID, step.GetID(), lastErr, attempt, duration.Milliseconds())
 	}
 
 	// All retries exhausted
@@ -181,7 +171,7 @@ func (e *Engine) executeStep(
 	}
 
 	if err := e.store.UpdateStepExecution(ctx, stepExec); err != nil {
-		e.logger.Error().Err(err).Msg("Failed to update step execution on failure")
+		gorkflow.LogPersistenceError(e.logger, run.RunID, "update_step_execution_failure", err)
 	}
 
 	stepLogger.Error().

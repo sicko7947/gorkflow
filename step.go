@@ -203,6 +203,7 @@ func (cs *ConditionalStep[TIn, TOut]) Execute(ctx *StepContext, inputBytes []byt
 	}
 
 	if !shouldRun {
+		LogStepSkipped(ctx.Logger, ctx.RunID, ctx.StepID, "condition_not_met")
 		// Step skipped - return default or zero value
 		if cs.Default != nil {
 			return json.Marshal(cs.Default)
@@ -276,6 +277,7 @@ func (w *conditionalStepWrapper) Execute(ctx *StepContext, inputBytes []byte) ([
 	}
 
 	if !shouldRun {
+		LogStepSkipped(ctx.Logger, ctx.RunID, ctx.StepID, "condition_not_met")
 		// Step skipped - return default or zero value
 		if w.defaultValue != nil {
 			return json.Marshal(w.defaultValue)

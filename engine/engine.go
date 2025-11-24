@@ -126,11 +126,7 @@ func (e *Engine) StartWorkflow(
 		return "", fmt.Errorf("failed to create workflow run: %w", err)
 	}
 
-	e.logger.Info().
-		Str("run_id", runID).
-		Str("workflow_id", wf.ID()).
-		Str("resource_id", options.ResourceID).
-		Msg("Workflow run created")
+	gorkflow.LogWorkflowCreated(e.logger, runID, wf.ID(), options.ResourceID)
 
 	// Launch execution in background
 	if !options.Synchronous {
@@ -144,12 +140,9 @@ func (e *Engine) StartWorkflow(
 
 // executeWorkflow runs the workflow (called asynchronously)
 func (e *Engine) executeWorkflow(ctx context.Context, wf *gorkflow.Workflow, run *gorkflow.WorkflowRun) error {
-	workflowLogger := e.logger.With().
-		Str("run_id", run.RunID).
-		Str("workflow_id", run.WorkflowID).
-		Logger()
+	workflowLogger := gorkflow.WorkflowLogger(e.logger, run.RunID, run.WorkflowID, run.ResourceID)
 
-	workflowLogger.Info().Msg("Starting workflow execution")
+	gorkflow.LogWorkflowStarted(e.logger, run.RunID, run.WorkflowID, run.ResourceID)
 
 	// Update status to running
 	startTime := time.Now()
@@ -158,7 +151,7 @@ func (e *Engine) executeWorkflow(ctx context.Context, wf *gorkflow.Workflow, run
 	run.UpdatedAt = startTime
 
 	if err := e.store.UpdateRun(ctx, run); err != nil {
-		workflowLogger.Error().Err(err).Msg("Failed to update run status to running")
+		gorkflow.LogPersistenceError(e.logger, run.RunID, "update_run_status", err)
 		return err
 	}
 
@@ -187,7 +180,7 @@ func (e *Engine) executeWorkflow(ctx context.Context, wf *gorkflow.Workflow, run
 		// Check for cancellation
 		select {
 		case <-ctx.Done():
-			workflowLogger.Warn().Msg("Workflow execution cancelled")
+			gorkflow.LogWorkflowCancelled(e.logger, run.RunID)
 			return e.cancelWorkflow(ctx, run)
 		default:
 		}
@@ -199,12 +192,7 @@ func (e *Engine) executeWorkflow(ctx context.Context, wf *gorkflow.Workflow, run
 			return e.failWorkflow(ctx, run, err)
 		}
 
-		workflowLogger.Info().
-			Str("step_id", stepID).
-			Str("step_name", step.GetName()).
-			Int("step_num", completedSteps+1).
-			Int("total_steps", totalSteps).
-			Msg("Executing step")
+		gorkflow.LogStepStarted(e.logger, run.RunID, stepID, step.GetName(), completedSteps+1, totalSteps)
 
 		// Prepare input for this step
 		var stepInput []byte
@@ -237,7 +225,7 @@ func (e *Engine) executeWorkflow(ctx context.Context, wf *gorkflow.Workflow, run
 		}
 
 		// Execute step
-		result, err := e.executeStep(ctx, run, step, stepInput, outputs, state)
+		_, err = e.executeStep(ctx, run, step, stepInput, outputs, state)
 		if err != nil {
 			// Check if we should continue on error
 			if step.GetConfig().ContinueOnError {
@@ -262,13 +250,10 @@ func (e *Engine) executeWorkflow(ctx context.Context, wf *gorkflow.Workflow, run
 		run.UpdatedAt = time.Now()
 
 		if err := e.store.UpdateRun(ctx, run); err != nil {
-			workflowLogger.Error().Err(err).Msg("Failed to update progress")
+			gorkflow.LogPersistenceError(e.logger, run.RunID, "update_run_progress", err)
 		}
 
-		workflowLogger.Debug().
-			Float64("progress", progress).
-			Int64("duration_ms", result.DurationMs).
-			Msg("Step completed, progress updated")
+		gorkflow.LogWorkflowProgress(e.logger, run.RunID, progress)
 	}
 
 	// All steps completed successfully
@@ -288,10 +273,7 @@ func (e *Engine) completeWorkflow(ctx context.Context, run *gorkflow.WorkflowRun
 	}
 
 	duration := completedAt.Sub(*run.StartedAt)
-	e.logger.Info().
-		Str("run_id", run.RunID).
-		Dur("duration", duration).
-		Msg("Workflow completed successfully")
+	gorkflow.LogWorkflowCompleted(e.logger, run.RunID, duration)
 
 	return nil
 }
@@ -309,13 +291,10 @@ func (e *Engine) failWorkflow(ctx context.Context, run *gorkflow.WorkflowRun, er
 	}
 
 	if updateErr := e.store.UpdateRun(ctx, run); updateErr != nil {
-		e.logger.Error().Err(updateErr).Msg("Failed to update run on failure")
+		gorkflow.LogPersistenceError(e.logger, run.RunID, "update_run_failure", updateErr)
 	}
 
-	e.logger.Error().
-		Str("run_id", run.RunID).
-		Err(err).
-		Msg("Workflow failed")
+	gorkflow.LogWorkflowFailed(e.logger, run.RunID, err)
 
 	return err
 }
@@ -331,9 +310,7 @@ func (e *Engine) cancelWorkflow(ctx context.Context, run *gorkflow.WorkflowRun) 
 		return fmt.Errorf("failed to update run on cancellation: %w", err)
 	}
 
-	e.logger.Warn().
-		Str("run_id", run.RunID).
-		Msg("Workflow cancelled")
+	gorkflow.LogWorkflowCancelled(e.logger, run.RunID)
 
 	return nil
 }
