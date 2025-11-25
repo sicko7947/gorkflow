@@ -5,6 +5,7 @@ A powerful, type-safe, and flexible workflow orchestration engine for Go with bu
 ## Features
 
 - **🎯 Type-Safe Step Definitions**: Strongly-typed input/output for workflow steps using Go generics
+- **✅ Input/Output Validation**: Built-in struct validation using `go-playground/validator/v10` with automatic error throwing
 - **📊 DAG-Based Execution**: Define workflows as directed acyclic graphs with sequential and parallel execution
 - **🔄 Built-in Retry Logic**: Configurable retry policies with linear and exponential backoff strategies
 - **💾 Persistent State Management**: Pluggable storage backends (DynamoDB and in-memory implementations included)
@@ -271,6 +272,70 @@ func handler(ctx *workflow.StepContext, input MyInput) (MyOutput, error) {
 ```
 
 ### Cancellation
+
+Cancel a running workflow:
+
+```go
+err := eng.Cancel(ctx, runID)
+if err != nil {
+    logger.Error().Err(err).Msg("Failed to cancel workflow")
+}
+```
+
+### Input/Output Validation
+
+**Validation is enabled by default!** Just add validation tags to your structs using `go-playground/validator/v10`:
+
+```go
+// Define types with validation tags
+type UserInput struct {
+    Email    string `json:"email" validate:"required,email"`
+    Username string `json:"username" validate:"required,min=3,max=20,alphanum"`
+    Age      int    `json:"age" validate:"required,gte=18,lte=120"`
+}
+
+type UserOutput struct {
+    UserID string `json:"userId" validate:"required,uuid4"`
+    Email  string `json:"email" validate:"required,email"`
+}
+
+// Create step - validation happens automatically!
+step := workflow.NewStep(
+    "create_user",
+    "Create User",
+    handler,
+    // No configuration needed - validation is automatic!
+)
+```
+
+**Validation happens automatically:**
+
+- ✅ Input is validated **before** the step handler executes
+- ✅ Output is validated **after** the step handler executes
+- ❌ Validation errors throw detailed error messages and stop execution
+
+**Example error:**
+
+```
+validation failed:
+  - field 'Email' failed on 'email' tag: got value 'invalid'
+  - field 'Age' failed on 'gte' tag (param: 18): got value '16'
+```
+
+**To disable validation** (if needed):
+
+```go
+step := workflow.NewStep(
+    "my_step", "My Step", handler,
+    workflow.WithoutValidation(), // Explicitly disable
+)
+```
+
+**See also:**
+
+- [Validation Example](example/validation/) - Complete working example
+- [Quick Reference](VALIDATION_QUICK_REF.md) - Common validation tags
+- [go-playground/validator docs](https://github.com/go-playground/validator)
 
 Cancel a running workflow:
 

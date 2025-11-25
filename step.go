@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+
+	"github.com/go-playground/validator/v10"
 )
 
 // StepHandler is the user-defined function signature for step logic
@@ -21,6 +23,9 @@ type Step[TIn, TOut any] struct {
 
 	// Execution configuration
 	Config ExecutionConfig
+
+	// Validation configuration (internal)
+	validationConfig *validationConfig
 
 	// Type information (for runtime reflection/validation)
 	inputType  reflect.Type
@@ -47,22 +52,23 @@ type StepExecutor interface {
 	ValidateOutput(data []byte) error
 }
 
-// NewStep creates a new type-safe step
+// NewStep creates a new type-safe step with validation enabled by default
 func NewStep[TIn, TOut any](
 	id, name string,
 	handler StepHandler[TIn, TOut],
 	opts ...StepOption,
 ) *Step[TIn, TOut] {
 	s := &Step[TIn, TOut]{
-		ID:         id,
-		Name:       name,
-		Handler:    handler,
-		Config:     DefaultExecutionConfig,
-		inputType:  reflect.TypeOf((*TIn)(nil)).Elem(),
-		outputType: reflect.TypeOf((*TOut)(nil)).Elem(),
+		ID:               id,
+		Name:             name,
+		Handler:          handler,
+		Config:           DefaultExecutionConfig,
+		validationConfig: defaultValidationConfig, // Validation enabled by default
+		inputType:        reflect.TypeOf((*TIn)(nil)).Elem(),
+		outputType:       reflect.TypeOf((*TOut)(nil)).Elem(),
 	}
 
-	// Apply options
+	// Apply options (can override validation config)
 	for _, opt := range opts {
 		opt.applyStep(s)
 	}
@@ -96,12 +102,12 @@ func (s *Step[TIn, TOut]) OutputType() reflect.Type {
 	return s.outputType
 }
 
-// Execute runs the step handler with type-safe marshaling
+// Execute runs the step handler with type-safe marshaling and validation
 func (s *Step[TIn, TOut]) Execute(ctx *StepContext, inputBytes []byte) ([]byte, error) {
-	// Unmarshal input
-	var input TIn
-	if err := json.Unmarshal(inputBytes, &input); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal input: %w", err)
+	// Unmarshal and validate input
+	input, err := validateInputData[TIn](inputBytes, s.validationConfig)
+	if err != nil {
+		return nil, err
 	}
 
 	// Execute user's handler
@@ -110,30 +116,38 @@ func (s *Step[TIn, TOut]) Execute(ctx *StepContext, inputBytes []byte) ([]byte, 
 		return nil, err
 	}
 
-	// Marshal output
-	outputBytes, err := json.Marshal(output)
+	// Validate and marshal output
+	outputBytes, err := validateOutputData(output, s.validationConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal output: %w", err)
+		return nil, err
 	}
 
 	return outputBytes, nil
 }
 
-// ValidateInput validates that data can be unmarshaled to TIn
+// ValidateInput validates that data can be unmarshaled to TIn and passes validation
 func (s *Step[TIn, TOut]) ValidateInput(data []byte) error {
-	var input TIn
-	if err := json.Unmarshal(data, &input); err != nil {
+	_, err := validateInputData[TIn](data, s.validationConfig)
+	if err != nil {
 		return fmt.Errorf("invalid input for step %s: %w", s.ID, err)
 	}
 	return nil
 }
 
-// ValidateOutput validates that data can be unmarshaled to TOut
+// ValidateOutput validates that data can be unmarshaled to TOut and passes validation
 func (s *Step[TIn, TOut]) ValidateOutput(data []byte) error {
 	var output TOut
 	if err := json.Unmarshal(data, &output); err != nil {
 		return fmt.Errorf("invalid output for step %s: %w", s.ID, err)
 	}
+
+	// Validate struct if validation is enabled
+	if s.validationConfig != nil && s.validationConfig.validateOutput {
+		if err := s.validationConfig.validateStruct(output); err != nil {
+			return fmt.Errorf("output validation failed for step %s: %w", s.ID, err)
+		}
+	}
+
 	return nil
 }
 
@@ -157,6 +171,20 @@ func (s *Step[TIn, TOut]) SetRetryDelay(ms int) {
 
 func (s *Step[TIn, TOut]) SetContinueOnError(continueOnError bool) {
 	s.Config.ContinueOnError = continueOnError
+}
+
+func (s *Step[TIn, TOut]) SetCustomValidator(v *validator.Validate) {
+	if s.validationConfig == nil {
+		s.validationConfig = &validationConfig{
+			validateInput:  true,
+			validateOutput: true,
+		}
+	}
+	s.validationConfig.validator = v
+}
+
+func (s *Step[TIn, TOut]) DisableValidation() {
+	s.validationConfig = nil
 }
 
 // Condition is a function that determines if a step should execute
