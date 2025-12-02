@@ -451,6 +451,24 @@ AWS_REGION=eu-west-1 AWS_DYNAMODB_TABLE_NAME=workflows ./scripts/create-dynamodb
 - Uses PAY_PER_REQUEST billing mode
 - Tags the table with project metadata
 
+#### LibSQL / SQLite Store
+
+Persistent storage using LibSQL (compatible with SQLite and Turso):
+
+```go
+import (
+    "github.com/sicko7947/gorkflow/store"
+)
+
+// Local SQLite file
+store, err := store.NewLibSQLStore("file:./workflow.db")
+
+// Remote Turso database
+// store, err := store.NewLibSQLStore("libsql://my-db-user.turso.io?authToken=...")
+```
+
+The LibSQL store automatically creates the necessary tables (`workflow_runs`, `step_executions`, `step_outputs`, `workflow_state`) if they don't exist.
+
 #### Memory Store
 
 In-memory storage for testing and development:
