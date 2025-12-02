@@ -235,7 +235,7 @@ func (e *Engine) executeWorkflow(ctx context.Context, wf *gorkflow.Workflow, run
 		}
 
 		// Execute step
-		_, err = e.executeStep(ctx, run, step, stepInput, outputs, state, wf.GetContext())
+		_, err = e.executeStep(ctx, run, step, stepInput, outputs, state, wf.GetContext(), completedSteps)
 		if err != nil {
 			// Check if we should continue on error
 			if step.GetConfig().ContinueOnError {

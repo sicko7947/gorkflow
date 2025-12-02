@@ -26,6 +26,7 @@ func (e *Engine) executeStep(
 	outputs gorkflow.StepOutputAccessor,
 	state gorkflow.StateAccessor,
 	customContext any,
+	executionIndex int,
 ) (*StepExecutionResult, error) {
 	config := step.GetConfig()
 
@@ -33,7 +34,7 @@ func (e *Engine) executeStep(
 	stepExec := &gorkflow.StepExecution{
 		RunID:          run.RunID,
 		StepID:         step.GetID(),
-		ExecutionIndex: 0,
+		ExecutionIndex: executionIndex,
 		Status:         gorkflow.StepStatusPending,
 		Input:          inputBytes,
 		StartedAt:      nil,

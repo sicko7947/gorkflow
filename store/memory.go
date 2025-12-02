@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/sicko7947/gorkflow"
@@ -190,6 +191,11 @@ func (s *MemoryStore) ListStepExecutions(ctx context.Context, runID string) ([]*
 		execCopy := *exec
 		executions = append(executions, &execCopy)
 	}
+
+	// Sort by execution index
+	sort.Slice(executions, func(i, j int) bool {
+		return executions[i].ExecutionIndex < executions[j].ExecutionIndex
+	})
 
 	return executions, nil
 }
