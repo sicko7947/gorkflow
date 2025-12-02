@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -289,6 +290,11 @@ func (s *DynamoDBStore) ListStepExecutions(ctx context.Context, runID string) ([
 		}
 		lastEvaluatedKey = result.LastEvaluatedKey
 	}
+
+	// Sort by execution index
+	sort.Slice(executions, func(i, j int) bool {
+		return executions[i].ExecutionIndex < executions[j].ExecutionIndex
+	})
 
 	return executions, nil
 }
