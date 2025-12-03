@@ -4,11 +4,10 @@ import (
 	"fmt"
 
 	"github.com/sicko7947/gorkflow"
-	"github.com/sicko7947/gorkflow/builder"
 )
 
 func NewSimpleMathWorkflow() (*gorkflow.Workflow, error) {
-	wf, err := builder.NewWorkflow("sequential", "Simple Math Workflow").
+	wf, err := gorkflow.NewWorkflow("sequential", "Simple Math Workflow").
 		WithDescription("A simple workflow to test the engine").
 		WithVersion("1.0").
 		WithConfig(gorkflow.ExecutionConfig{

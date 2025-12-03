@@ -5,12 +5,17 @@ import (
 	"testing"
 
 	"github.com/sicko7947/gorkflow"
-	"github.com/sicko7947/gorkflow/builder"
 	"github.com/sicko7947/gorkflow/engine"
 	"github.com/sicko7947/gorkflow/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func createTestWorkflow(t *testing.T) *gorkflow.Workflow {
+	wf, err := gorkflow.NewWorkflow("test-wf", "Test Workflow").Build()
+	require.NoError(t, err)
+	return wf
+}
 
 type TestRunContext struct {
 	UserID    string
@@ -39,7 +44,7 @@ func TestGetRunContext(t *testing.T) {
 	)
 
 	// Build workflow with context
-	wf := builder.NewWorkflow("context-retrieval-test", "Context Retrieval Test").
+	wf := gorkflow.NewWorkflow("context-retrieval-test", "Context Retrieval Test").
 		WithContext(customCtx).
 		ThenStep(step).
 		MustBuild()
@@ -74,7 +79,7 @@ func TestGetRunContext_NoContext(t *testing.T) {
 		},
 	)
 
-	wf := builder.NewWorkflow("no-context-test", "No Context Test").
+	wf := gorkflow.NewWorkflow("no-context-test", "No Context Test").
 		ThenStep(step).
 		MustBuild()
 

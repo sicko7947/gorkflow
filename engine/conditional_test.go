@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/sicko7947/gorkflow"
-	"github.com/sicko7947/gorkflow/builder"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -30,7 +29,7 @@ func TestEngine_ConditionalStep_ExecutesWhenTrue(t *testing.T) {
 
 	condStep := gorkflow.NewConditionalStep(baseStep, condition, nil)
 
-	wf, err := builder.NewWorkflow("conditional_true", "Conditional True").
+	wf, err := gorkflow.NewWorkflow("conditional_true", "Conditional True").
 		ThenStep(condStep).
 		Build()
 	require.NoError(t, err)
@@ -63,7 +62,7 @@ func TestEngine_ConditionalStep_SkipsWhenFalse(t *testing.T) {
 	defaultOutput := &DiscoverOutput{Companies: []string{"Default"}, Count: 0}
 	condStep := gorkflow.NewConditionalStep(baseStep, condition, defaultOutput)
 
-	wf, err := builder.NewWorkflow("conditional_false", "Conditional False").
+	wf, err := gorkflow.NewWorkflow("conditional_false", "Conditional False").
 		ThenStep(condStep).
 		Build()
 	require.NoError(t, err)
@@ -114,7 +113,7 @@ func TestEngine_ConditionalStep_BasedOnState(t *testing.T) {
 
 	condStep := gorkflow.NewConditionalStep(baseStep, condition, nil)
 
-	wf, err := builder.NewWorkflow("conditional_state", "Conditional State").
+	wf, err := gorkflow.NewWorkflow("conditional_state", "Conditional State").
 		ThenStep(setupStep).
 		ThenStep(condStep).
 		Build()
@@ -167,7 +166,7 @@ func TestEngine_ConditionalStep_BasedOnPreviousOutput(t *testing.T) {
 
 	condEnrich := gorkflow.NewConditionalStep(enrichStep, condition, nil)
 
-	wf, err := builder.NewWorkflow("conditional_default", "Conditional Default").
+	wf, err := gorkflow.NewWorkflow("conditional_default", "Conditional Default").
 		ThenStep(discoverStep).
 		ThenStep(condEnrich).
 		Build()
@@ -202,7 +201,7 @@ func TestEngine_ConditionalStep_ConditionError(t *testing.T) {
 
 	condStep := gorkflow.NewConditionalStep(baseStep, condition, nil)
 
-	wf, err := builder.NewWorkflow("conditional_true", "Conditional True").
+	wf, err := gorkflow.NewWorkflow("conditional_true", "Conditional True").
 		ThenStep(condStep).
 		Build()
 	require.NoError(t, err)
@@ -252,7 +251,7 @@ func TestEngine_MultipleConditionalSteps(t *testing.T) {
 	}
 	condStep3 := gorkflow.NewConditionalStep(cond3Step, cond3, nil)
 
-	wf, err := builder.NewWorkflow("complex_conditional", "Complex Conditional").
+	wf, err := gorkflow.NewWorkflow("complex_conditional", "Complex Conditional").
 		ThenStep(step1).
 		ThenStep(condStep2).
 		ThenStep(condStep3).
@@ -294,7 +293,7 @@ func TestEngine_ConditionalStep_WithRetry(t *testing.T) {
 
 	condStep := gorkflow.NewConditionalStep(baseStep, condition, nil)
 
-	wf, err := builder.NewWorkflow("cond_retry", "Conditional Retry").
+	wf, err := gorkflow.NewWorkflow("cond_retry", "Conditional Retry").
 		ThenStep(condStep).
 		Build()
 	require.NoError(t, err)

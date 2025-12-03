@@ -3,6 +3,7 @@ package gorkflow
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	"github.com/go-playground/validator/v10"
 )
@@ -27,6 +28,15 @@ var defaultValidationConfig = &validationConfig{
 // validateStruct validates a struct using the validator
 func (vc *validationConfig) validateStruct(v interface{}) error {
 	if vc == nil || vc.validator == nil {
+		return nil
+	}
+
+	// Only validate structs
+	val := reflect.ValueOf(v)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Struct {
 		return nil
 	}
 

@@ -90,7 +90,7 @@ func NewFormatStep() *workflow.Step[SumOutput, ResultOutput] {
 
 ```go
 import (
-    "github.com/sicko7947/gorkflow/builder"
+    "github.com/sicko7947/gorkflow"
 )
 
 func NewCalculationWorkflow() (*workflow.Workflow, error) {

@@ -39,6 +39,7 @@ type StepExecutor interface {
 	GetName() string
 	GetDescription() string
 	GetConfig() ExecutionConfig
+	SetConfig(config ExecutionConfig)
 
 	// Type information
 	InputType() reflect.Type
@@ -92,6 +93,10 @@ func (s *Step[TIn, TOut]) GetDescription() string {
 
 func (s *Step[TIn, TOut]) GetConfig() ExecutionConfig {
 	return s.Config
+}
+
+func (s *Step[TIn, TOut]) SetConfig(config ExecutionConfig) {
+	s.Config = config
 }
 
 func (s *Step[TIn, TOut]) InputType() reflect.Type {
@@ -215,6 +220,10 @@ func (cs *ConditionalStep[TIn, TOut]) GetConfig() ExecutionConfig {
 	return cs.Step.GetConfig()
 }
 
+func (cs *ConditionalStep[TIn, TOut]) SetConfig(config ExecutionConfig) {
+	cs.Step.SetConfig(config)
+}
+
 func (cs *ConditionalStep[TIn, TOut]) InputType() reflect.Type {
 	return cs.Step.InputType()
 }
@@ -287,6 +296,10 @@ func (w *conditionalStepWrapper) GetDescription() string {
 
 func (w *conditionalStepWrapper) GetConfig() ExecutionConfig {
 	return w.step.GetConfig()
+}
+
+func (w *conditionalStepWrapper) SetConfig(config ExecutionConfig) {
+	w.step.SetConfig(config)
 }
 
 func (w *conditionalStepWrapper) InputType() reflect.Type {

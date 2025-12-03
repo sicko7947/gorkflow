@@ -42,6 +42,16 @@ func (g *ExecutionGraph) AddNode(stepID string, nodeType NodeType) {
 	}
 }
 
+// UpdateNodeType updates the type of an existing node
+func (g *ExecutionGraph) UpdateNodeType(stepID string, nodeType NodeType) error {
+	node, exists := g.Nodes[stepID]
+	if !exists {
+		return fmt.Errorf("node %s not found", stepID)
+	}
+	node.Type = nodeType
+	return nil
+}
+
 // AddEdge adds a directed edge from one step to another
 func (g *ExecutionGraph) AddEdge(fromStepID, toStepID string) error {
 	fromNode, exists := g.Nodes[fromStepID]

@@ -8,7 +8,6 @@ import (
 
 	"github.com/rs/zerolog"
 	workflow "github.com/sicko7947/gorkflow"
-	"github.com/sicko7947/gorkflow/builder"
 	"github.com/sicko7947/gorkflow/engine"
 	"github.com/sicko7947/gorkflow/store"
 )
@@ -101,8 +100,7 @@ func main() {
 	logger.Info().Str("db_path", dbPath).Msg("LibSQL store initialized")
 
 	// Create workflow
-	wf, err := builder.NewWorkflow("simple_math", "Simple Math Workflow").
-		WithDescription("A simple workflow demonstrating LibSQL persistence").
+	wf, err := workflow.NewWorkflow("simple_math", "Simple Math Workflow").
 		WithVersion("1.0").
 		Sequence(
 			NewAddStep(),

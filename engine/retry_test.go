@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/sicko7947/gorkflow"
-	"github.com/sicko7947/gorkflow/builder"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -31,7 +30,7 @@ func TestEngine_RetrySuccess(t *testing.T) {
 		gorkflow.WithRetryDelay(100*time.Millisecond),
 	)
 
-	wf, err := builder.NewWorkflow("retry_test", "Retry Test").
+	wf, err := gorkflow.NewWorkflow("retry_test", "Retry Test").
 		ThenStep(retryStep).
 		Build()
 	require.NoError(t, err)
@@ -66,7 +65,7 @@ func TestEngine_RetryExhaustion(t *testing.T) {
 		gorkflow.WithRetryDelay(50*time.Millisecond),
 	)
 
-	wf, err := builder.NewWorkflow("exhaust_test", "Exhaust Test").
+	wf, err := gorkflow.NewWorkflow("exhaust_test", "Exhaust Test").
 		ThenStep(alwaysFailStep).
 		Build()
 	require.NoError(t, err)
@@ -106,7 +105,7 @@ func TestEngine_LinearBackoff(t *testing.T) {
 		gorkflow.WithBackoff(gorkflow.BackoffLinear),
 	)
 
-	wf, err := builder.NewWorkflow("linear_backoff", "Linear Backoff").
+	wf, err := gorkflow.NewWorkflow("linear_backoff", "Linear Backoff").
 		ThenStep(retryStep).
 		Build()
 	require.NoError(t, err)
@@ -151,7 +150,7 @@ func TestEngine_ExponentialBackoff(t *testing.T) {
 		gorkflow.WithBackoff(gorkflow.BackoffExponential),
 	)
 
-	wf, err := builder.NewWorkflow("exp_backoff", "Exponential Backoff").
+	wf, err := gorkflow.NewWorkflow("exp_backoff", "Exponential Backoff").
 		ThenStep(retryStep).
 		Build()
 	require.NoError(t, err)
@@ -195,7 +194,7 @@ func TestEngine_NoBackoff(t *testing.T) {
 		gorkflow.WithBackoff(gorkflow.BackoffNone),
 	)
 
-	wf, err := builder.NewWorkflow("no_backoff", "No Backoff").
+	wf, err := gorkflow.NewWorkflow("no_backoff", "No Backoff").
 		ThenStep(retryStep).
 		Build()
 	require.NoError(t, err)
@@ -234,7 +233,7 @@ func TestEngine_Timeout(t *testing.T) {
 		gorkflow.WithRetries(0), // No retries to make test faster
 	)
 
-	wf, err := builder.NewWorkflow("timeout_test", "Timeout Test").
+	wf, err := gorkflow.NewWorkflow("timeout_test", "Timeout Test").
 		ThenStep(slowStep).
 		Build()
 	require.NoError(t, err)
@@ -277,7 +276,7 @@ func TestEngine_TimeoutWithRetry(t *testing.T) {
 		gorkflow.WithRetryDelay(100*time.Millisecond),
 	)
 
-	wf, err := builder.NewWorkflow("timeout_retry_test", "Timeout Retry Test").
+	wf, err := gorkflow.NewWorkflow("timeout_retry_test", "Timeout Retry Test").
 		ThenStep(timeoutRetryStep).
 		Build()
 	require.NoError(t, err)
@@ -309,7 +308,7 @@ func TestEngine_ContinueOnError(t *testing.T) {
 		},
 	)
 
-	wf, err := builder.NewWorkflow("continue_on_error", "Continue On Error").
+	wf, err := gorkflow.NewWorkflow("continue_on_error", "Continue On Error").
 		ThenStep(failStep).
 		ThenStep(successStep).
 		Build()

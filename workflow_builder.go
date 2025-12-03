@@ -1,14 +1,12 @@
-package builder
+package gorkflow
 
 import (
 	"fmt"
-
-	"github.com/sicko7947/gorkflow"
 )
 
 // WorkflowBuilder provides a fluent API for building workflows
 type WorkflowBuilder struct {
-	workflow     *gorkflow.Workflow
+	workflow     *Workflow
 	lastStepIDs  []string
 	currentChain []string
 }
@@ -16,7 +14,7 @@ type WorkflowBuilder struct {
 // NewWorkflow creates a new workflow builder
 func NewWorkflow(id, name string) *WorkflowBuilder {
 	return &WorkflowBuilder{
-		workflow:     gorkflow.NewWorkflowInstance(id, name),
+		workflow:     NewWorkflowInstance(id, name),
 		lastStepIDs:  []string{},
 		currentChain: []string{},
 	}
@@ -35,7 +33,7 @@ func (b *WorkflowBuilder) WithVersion(version string) *WorkflowBuilder {
 }
 
 // WithConfig sets the default execution config
-func (b *WorkflowBuilder) WithConfig(config gorkflow.ExecutionConfig) *WorkflowBuilder {
+func (b *WorkflowBuilder) WithConfig(config ExecutionConfig) *WorkflowBuilder {
 	b.workflow.SetConfig(config)
 	return b
 }
@@ -53,18 +51,18 @@ func (b *WorkflowBuilder) WithContext(ctx any) *WorkflowBuilder {
 }
 
 // ThenStep chains the given step after the last added step
-func (b *WorkflowBuilder) ThenStep(step gorkflow.StepExecutor) *WorkflowBuilder {
+func (b *WorkflowBuilder) ThenStep(step StepExecutor) *WorkflowBuilder {
 	stepID := step.GetID()
 
 	// Register step if not already registered
 	if _, err := b.workflow.GetStep(stepID); err != nil {
 		b.workflow.AddStep(step)
-		b.workflow.Graph().AddNode(stepID, gorkflow.NodeTypeSequential)
+		// Note: AddStep now adds node to graph as Sequential by default
 	}
 
 	// Chain from last steps
 	for _, lastID := range b.lastStepIDs {
-		if err := b.workflow.Graph().AddEdge(lastID, stepID); err != nil {
+		if err := b.workflow.graph.AddEdge(lastID, stepID); err != nil {
 			panic(fmt.Sprintf("failed to add edge: %v", err))
 		}
 	}
@@ -76,7 +74,7 @@ func (b *WorkflowBuilder) ThenStep(step gorkflow.StepExecutor) *WorkflowBuilder 
 }
 
 // Parallel adds multiple steps that execute in parallel after the last step(s)
-func (b *WorkflowBuilder) Parallel(steps ...gorkflow.StepExecutor) *WorkflowBuilder {
+func (b *WorkflowBuilder) Parallel(steps ...StepExecutor) *WorkflowBuilder {
 	var newLastIDs []string
 	for _, step := range steps {
 		stepID := step.GetID()
@@ -84,12 +82,15 @@ func (b *WorkflowBuilder) Parallel(steps ...gorkflow.StepExecutor) *WorkflowBuil
 		// Register step if not already registered
 		if _, err := b.workflow.GetStep(stepID); err != nil {
 			b.workflow.AddStep(step)
-			b.workflow.Graph().AddNode(stepID, gorkflow.NodeTypeParallel)
+			// Update node type to Parallel
+			if err := b.workflow.graph.UpdateNodeType(stepID, NodeTypeParallel); err != nil {
+				panic(fmt.Sprintf("failed to update node type: %v", err))
+			}
 		}
 
 		// Chain from last steps
 		for _, lastID := range b.lastStepIDs {
-			if err := b.workflow.Graph().AddEdge(lastID, stepID); err != nil {
+			if err := b.workflow.graph.AddEdge(lastID, stepID); err != nil {
 				panic(fmt.Sprintf("failed to add edge: %v", err))
 			}
 		}
@@ -103,7 +104,7 @@ func (b *WorkflowBuilder) Parallel(steps ...gorkflow.StepExecutor) *WorkflowBuil
 }
 
 // Sequence adds multiple steps and chains them together in order
-func (b *WorkflowBuilder) Sequence(steps ...gorkflow.StepExecutor) *WorkflowBuilder {
+func (b *WorkflowBuilder) Sequence(steps ...StepExecutor) *WorkflowBuilder {
 	for _, step := range steps {
 		b.ThenStep(step)
 	}
@@ -122,31 +123,39 @@ func (b *WorkflowBuilder) Sequence(steps ...gorkflow.StepExecutor) *WorkflowBuil
 //	    return shouldProcess, nil
 //	}
 //	builder.ThenStepIf(processStep, condition, nil)
-func (b *WorkflowBuilder) ThenStepIf(step gorkflow.StepExecutor, condition gorkflow.Condition, defaultValue any) *WorkflowBuilder {
+func (b *WorkflowBuilder) ThenStepIf(step StepExecutor, condition Condition, defaultValue any) *WorkflowBuilder {
 	// Wrap the step in a conditional wrapper
-	wrappedStep := gorkflow.WrapStepWithCondition(step, condition, defaultValue)
+	wrappedStep := WrapStepWithCondition(step, condition, defaultValue)
 	return b.ThenStep(wrappedStep)
 }
 
 // SetEntryPoint sets the workflow entry point explicitly
 func (b *WorkflowBuilder) SetEntryPoint(stepID string) *WorkflowBuilder {
-	if err := b.workflow.Graph().SetEntryPoint(stepID); err != nil {
+	if err := b.workflow.graph.SetEntryPoint(stepID); err != nil {
 		panic(fmt.Sprintf("failed to set entry point: %v", err))
 	}
 	return b
 }
 
 // Build finalizes and validates the workflow
-func (b *WorkflowBuilder) Build() (*gorkflow.Workflow, error) {
+func (b *WorkflowBuilder) Build() (*Workflow, error) {
 	// Validate graph
-	if err := b.workflow.Graph().Validate(); err != nil {
+	if err := b.workflow.graph.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid workflow graph: %w", err)
 	}
 
 	// Validate all steps exist
-	for stepID := range b.workflow.Graph().Nodes {
-		if _, err := b.workflow.GetStep(stepID); err != nil {
+	for stepID := range b.workflow.graph.Nodes {
+		step, err := b.workflow.GetStep(stepID)
+		if err != nil {
 			return nil, fmt.Errorf("step %s referenced in graph but not registered", stepID)
+		}
+
+		// Apply workflow config to step if step is using default config
+		// This allows workflow-level config (e.g. MaxRetries) to propagate to steps
+		// unless the step has been explicitly configured with non-default values.
+		if step.GetConfig() == DefaultExecutionConfig {
+			step.SetConfig(b.workflow.GetConfig())
 		}
 	}
 
@@ -154,7 +163,7 @@ func (b *WorkflowBuilder) Build() (*gorkflow.Workflow, error) {
 }
 
 // MustBuild finalizes and validates the workflow, panics on error
-func (b *WorkflowBuilder) MustBuild() *gorkflow.Workflow {
+func (b *WorkflowBuilder) MustBuild() *Workflow {
 	wf, err := b.Build()
 	if err != nil {
 		panic(fmt.Sprintf("failed to build workflow: %v", err))

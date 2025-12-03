@@ -8,7 +8,6 @@ import (
 
 	"github.com/rs/zerolog"
 	workflow "github.com/sicko7947/gorkflow"
-	"github.com/sicko7947/gorkflow/builder"
 	"github.com/sicko7947/gorkflow/engine"
 	"github.com/sicko7947/gorkflow/store"
 )
@@ -114,8 +113,7 @@ func main() {
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 
 	// Create workflow
-	wf, err := builder.NewWorkflow("user_registration", "User Registration Workflow").
-		WithDescription("Validates user input, creates user, and sends welcome email").
+	wf, err := workflow.NewWorkflow("user_registration", "User Registration Workflow").
 		WithVersion("1.0").
 		Sequence(
 			NewValidateUserStep(),

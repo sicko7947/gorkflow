@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/sicko7947/gorkflow"
-	"github.com/sicko7947/gorkflow/builder"
 )
 
 // NewConditionalWorkflow demonstrates conditional step execution using ThenStepIf
@@ -42,7 +41,7 @@ func NewConditionalWorkflow() (*gorkflow.Workflow, error) {
 	}
 
 	// Build workflow with conditional steps using ThenStepIf
-	wf, err := builder.NewWorkflow("conditional_example", "Conditional Execution Example").
+	wf, err := gorkflow.NewWorkflow("conditional_example", "Conditional Execution Example").
 		WithDescription("Demonstrates conditional step execution with ThenStepIf").
 		WithVersion("1.0").
 		WithConfig(gorkflow.ExecutionConfig{

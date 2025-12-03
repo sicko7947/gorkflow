@@ -10,7 +10,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/sicko7947/gorkflow"
-	"github.com/sicko7947/gorkflow/builder"
 	"github.com/sicko7947/gorkflow/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -139,7 +138,7 @@ func TestEngine_SimpleSequentialWorkflow(t *testing.T) {
 	enrichStep := gorkflow.NewStep("enrich", "Enrich Companies", enrichCompanies)
 	filterStep := gorkflow.NewStep("filter", "Filter Companies", filterCompanies)
 
-	wf, err := builder.NewWorkflow("sequential_test", "Sequential Test").
+	wf, err := gorkflow.NewWorkflow("sequential_test", "Sequential Test").
 		ThenStep(discoverStep).
 		ThenStep(enrichStep).
 		ThenStep(filterStep).
@@ -187,7 +186,7 @@ func TestEngine_WorkflowWithFailure(t *testing.T) {
 		gorkflow.WithRetries(2),
 	)
 
-	wf, err := builder.NewWorkflow("failing_workflow", "Failing Workflow").
+	wf, err := gorkflow.NewWorkflow("failing_workflow", "Failing Workflow").
 		ThenStep(failingStep).
 		Build()
 	require.NoError(t, err)
@@ -223,7 +222,7 @@ func TestEngine_WorkflowProgress(t *testing.T) {
 		},
 	)
 
-	wf, err := builder.NewWorkflow("progress_test", "Progress Test").
+	wf, err := gorkflow.NewWorkflow("progress_test", "Progress Test").
 		ThenStep(slowStep1).
 		ThenStep(slowStep2).
 		Build()
@@ -251,7 +250,7 @@ func TestEngine_StepOutputPassing(t *testing.T) {
 	discoverStep := gorkflow.NewStep("discover", "Discover", discoverCompanies)
 	enrichStep := gorkflow.NewStep("enrich", "Enrich", enrichCompanies)
 
-	wf, err := builder.NewWorkflow("output_test", "Output Test").
+	wf, err := gorkflow.NewWorkflow("output_test", "Output Test").
 		ThenStep(discoverStep).
 		ThenStep(enrichStep).
 		Build()
@@ -288,7 +287,7 @@ func TestEngine_GetStepExecutions(t *testing.T) {
 	discoverStep := gorkflow.NewStep("discover", "Discover", discoverCompanies)
 	enrichStep := gorkflow.NewStep("enrich", "Enrich", enrichCompanies)
 
-	wf, err := builder.NewWorkflow("test", "Test").
+	wf, err := gorkflow.NewWorkflow("test", "Test").
 		ThenStep(discoverStep).
 		ThenStep(enrichStep).
 		Build()
@@ -320,7 +319,7 @@ func TestEngine_ListRuns(t *testing.T) {
 
 	step := gorkflow.NewStep("test", "Test", discoverCompanies)
 
-	wf, err := builder.NewWorkflow("diamond_test", "Diamond Test").
+	wf, err := gorkflow.NewWorkflow("diamond_test", "Diamond Test").
 		ThenStep(step).
 		Build()
 	require.NoError(t, err)
@@ -360,7 +359,7 @@ func TestEngine_Cancel(t *testing.T) {
 		},
 	)
 
-	wf, err := builder.NewWorkflow("concurrency_test", "Concurrency Test").
+	wf, err := gorkflow.NewWorkflow("concurrency_test", "Concurrency Test").
 		ThenStep(longStep).
 		Build()
 	require.NoError(t, err)
@@ -400,7 +399,7 @@ func TestEngine_WorkflowState(t *testing.T) {
 		},
 	)
 
-	wf, err := builder.NewWorkflow("state_test", "State Test").
+	wf, err := gorkflow.NewWorkflow("state_test", "State Test").
 		ThenStep(statefulStep).
 		Build()
 	require.NoError(t, err)

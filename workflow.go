@@ -128,12 +128,32 @@ func (w *Workflow) SetTags(tags map[string]string) {
 	w.tags = tags
 }
 
-// AddStep registers a step in the workflow
+// AddStep registers a step in the workflow and adds it to the graph
 func (w *Workflow) AddStep(step StepExecutor) {
 	w.steps[step.GetID()] = step
+	// Also ensure node exists in graph
+	// Default to Sequential, builder can update type if needed
+	w.graph.AddNode(step.GetID(), NodeTypeSequential)
 }
 
 // SetContext sets the custom context for the workflow
 func (w *Workflow) SetContext(ctx any) {
 	w.customContext = ctx
+}
+
+// Validate performs comprehensive validation on the workflow
+func (w *Workflow) Validate() error {
+	// Validate graph structure
+	if err := w.graph.Validate(); err != nil {
+		return fmt.Errorf("invalid workflow graph: %w", err)
+	}
+
+	// Validate all steps in graph exist in workflow
+	for stepID := range w.graph.Nodes {
+		if _, exists := w.steps[stepID]; !exists {
+			return fmt.Errorf("step %s referenced in graph but not registered", stepID)
+		}
+	}
+
+	return nil
 }

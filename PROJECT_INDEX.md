@@ -57,6 +57,7 @@ gorkflow/
 ## 🚀 Entry Points
 
 ### Main Package
+
 - **Package:** `workflow` (root)
 - **Purpose:** Core workflow engine and types
 - **Key Functions:**
@@ -64,12 +65,14 @@ gorkflow/
   - `NewWorkflowInstance()` - Create workflow instance
 
 ### Builder Package
+
 - **Package:** `builder`
 - **Entry:** `builder.NewWorkflow()`
 - **Purpose:** Fluent API for constructing workflows
 - **Pattern:** Builder pattern with method chaining
 
 ### Engine Package
+
 - **Package:** `engine`
 - **Entry:** `engine.NewEngine()`
 - **Purpose:** Orchestrate workflow execution
@@ -79,12 +82,14 @@ gorkflow/
   - `Cancel()` - Cancel running workflow
 
 ### Store Package
+
 - **Package:** `store`
 - **Implementations:**
   - `NewMemoryStore()` - In-memory storage
   - `NewDynamoDBStore()` - AWS DynamoDB persistence
 
 ### Example Package
+
 - **Package:** `simple_math` (example)
 - **Entry:** `NewSimpleMathWorkflow()`
 - **Purpose:** Complete reference implementation
@@ -95,9 +100,11 @@ gorkflow/
 ## 📦 Core Modules
 
 ### Module: Workflow Definition
+
 **Files:** `workflow.go`, `step.go`, `graph.go`
 
 **Exports:**
+
 - `type Workflow` - Workflow blueprint
 - `type Step[TIn, TOut]` - Generic step definition
 - `type ExecutionGraph` - DAG representation
@@ -109,9 +116,11 @@ gorkflow/
 ---
 
 ### Module: Workflow Builder
+
 **Files:** `builder/builder.go`, `builder/options.go`, `builder/validation.go`
 
 **Exports:**
+
 - `type WorkflowBuilder` - Fluent builder
 - `NewWorkflow()` - Start building
 - `WithDescription()`, `WithVersion()`, `WithConfig()` - Configuration
@@ -125,9 +134,11 @@ gorkflow/
 ---
 
 ### Module: Execution Engine
+
 **Files:** `engine/engine.go`, `engine/executor.go`, `engine/traverser.go`
 
 **Exports:**
+
 - `type Engine` - Execution orchestrator
 - `type EngineConfig` - Engine configuration
 - `NewEngine()` - Create engine
@@ -141,9 +152,11 @@ gorkflow/
 ---
 
 ### Module: Retry & Backoff
+
 **Files:** `engine/backoff.go`
 
 **Exports:**
+
 - `type BackoffStrategy` - Backoff algorithm
 - `BackoffLinear`, `BackoffExponential`, `BackoffNone` - Strategies
 - Backoff calculation logic
@@ -153,9 +166,11 @@ gorkflow/
 ---
 
 ### Module: Graph Traversal
+
 **Files:** `engine/traverser.go`
 
 **Exports:**
+
 - `type GraphTraverser` - Graph traversal logic
 - `GetExecutionOrder()` - Topological sort
 - Dependency resolution
@@ -165,9 +180,11 @@ gorkflow/
 ---
 
 ### Module: Persistence Layer
+
 **Files:** `store/store.go`, `store/schema.go`
 
 **Exports:**
+
 - `type WorkflowStore` interface
 - `CreateRun()`, `UpdateRun()`, `GetRun()`
 - `CreateStepExecution()`, `UpdateStepExecution()`, `GetStepExecutions()`
@@ -178,9 +195,11 @@ gorkflow/
 ---
 
 ### Module: Memory Store
+
 **Files:** `store/memory.go`
 
 **Exports:**
+
 - `type MemoryStore` - In-memory implementation
 - `NewMemoryStore()` - Create store
 
@@ -189,9 +208,11 @@ gorkflow/
 ---
 
 ### Module: DynamoDB Store
+
 **Files:** `store/dynamodb.go`, `store/dynamodb_client.go`
 
 **Exports:**
+
 - `type DynamoDBStore` - DynamoDB implementation
 - `NewDynamoDBStore()` - Create store with AWS client
 - Schema mapping and marshaling
@@ -201,9 +222,11 @@ gorkflow/
 ---
 
 ### Module: Data Models
+
 **Files:** `models.go`
 
 **Exports:**
+
 - `type WorkflowRun` - Workflow execution record
 - `type StepExecution` - Step execution record
 - `type RunStatus` - Workflow status enum
@@ -216,9 +239,11 @@ gorkflow/
 ---
 
 ### Module: Configuration
+
 **Files:** `config.go`
 
 **Exports:**
+
 - `type ExecutionConfig` - Step/workflow configuration
 - `type BackoffStrategy` - Retry backoff types
 - `type StepOption` - Functional options
@@ -230,9 +255,11 @@ gorkflow/
 ---
 
 ### Module: Execution Context
+
 **Files:** `context.go`
 
 **Exports:**
+
 - `type StepContext` - Step execution context
 - `type StepOutputAccessor` - Access previous step outputs
 - `type StateAccessor` - Access workflow state
@@ -243,9 +270,11 @@ gorkflow/
 ---
 
 ### Module: Error Handling
+
 **Files:** `errors.go`
 
 **Exports:**
+
 - `type WorkflowError` - Workflow-specific errors
 - Error classification and formatting
 - Retry-related error types
@@ -257,9 +286,11 @@ gorkflow/
 ## 🔧 Configuration
 
 ### Environment Variables
+
 Not required for library usage. Configuration via code.
 
 ### Key Configuration Files
+
 - `go.mod` - Module dependencies
 - `go.sum` - Dependency checksums
 
@@ -276,6 +307,7 @@ Not required for library usage. Configuration via code.
 ## 🧪 Test Coverage
 
 ### Unit Tests
+
 - `*_test.go` files throughout codebase
 - Builder tests: `builder/builder_test.go`
 - Store tests: `store/memory_test.go`, `store/schema_test.go`
@@ -283,11 +315,13 @@ Not required for library usage. Configuration via code.
 - Conditional tests: `engine/conditional_test.go`
 
 ### Integration Tests
+
 - Engine integration: `engine/engine_integration_test.go`
 - DynamoDB integration: `store/dynamodb_integration_test.go`
 - DynamoDB store tests: `store/dynamodb_test.go`
 
 ### Test Execution
+
 ```bash
 # All tests
 go test ./...
@@ -304,15 +338,18 @@ go test -tags=integration ./store/...
 ## 🔗 Key Dependencies
 
 ### Core Dependencies
+
 - **aws/aws-sdk-go-v2** (v1.40.0) - AWS SDK for DynamoDB
 - **aws/aws-sdk-go-v2/service/dynamodb** (v1.53.1) - DynamoDB client
 - **google/uuid** (v1.6.0) - UUID generation for run IDs
 - **rs/zerolog** (v1.34.0) - Structured logging
 
 ### Test Dependencies
+
 - **stretchr/testify** (v1.11.1) - Testing assertions
 
 ### Go Version
+
 - Requires Go 1.21+ (uses generics)
 
 ---
@@ -320,15 +357,17 @@ go test -tags=integration ./store/...
 ## 📝 Quick Start
 
 ### 1. Install
+
 ```bash
 go get github.com/sicko7947/gorkflow
 ```
 
 ### 2. Create a Simple Workflow
+
 ```go
 import (
     workflow "github.com/sicko7947/gorkflow"
-    "github.com/sicko7947/gorkflow/builder"
+    "github.com/sicko7947/gorkflow"
     "github.com/sicko7947/gorkflow/engine"
     "github.com/sicko7947/gorkflow/store"
 )
@@ -356,6 +395,7 @@ runID, _ := eng.StartWorkflow(context.Background(), wf, "World")
 ```
 
 ### 3. Explore Example
+
 ```bash
 cd example/
 cat GUIDE.md
@@ -366,21 +406,27 @@ cat GUIDE.md
 ## 🎯 Use Cases
 
 ### Sequential Workflows
+
 Chain steps that depend on previous outputs
 
 ### Parallel Workflows
+
 Execute independent steps concurrently
 
 ### Data Processing Pipelines
+
 Transform data through multiple stages
 
 ### ETL Operations
+
 Extract, transform, and load data with retries
 
 ### Orchestration Tasks
+
 Coordinate multiple services or operations
 
 ### State Machines
+
 Implement complex state transitions
 
 ---
@@ -388,26 +434,31 @@ Implement complex state transitions
 ## 🏗️ Architecture Highlights
 
 ### Type Safety
+
 - Generic step definitions: `Step[TIn, TOut]`
 - Compile-time type checking
 - Automatic marshaling/unmarshaling
 
 ### DAG-Based Execution
+
 - Directed Acyclic Graph representation
 - Topological sorting for execution order
 - Cycle detection and validation
 
 ### Retry Mechanisms
+
 - Configurable retry policies
 - Linear and exponential backoff
 - Per-step timeout support
 
 ### State Persistence
+
 - Pluggable store interface
 - In-memory for development
 - DynamoDB for production
 
 ### Observability
+
 - Structured logging (zerolog)
 - Progress tracking (0.0 to 1.0)
 - Step execution history
@@ -441,6 +492,7 @@ Implement complex state transitions
 ## 🚦 Status Enums
 
 ### Workflow Run Status
+
 - `PENDING` - Created, not started
 - `RUNNING` - Currently executing
 - `COMPLETED` - Successfully finished
@@ -448,6 +500,7 @@ Implement complex state transitions
 - `CANCELLED` - Manually cancelled
 
 ### Step Execution Status
+
 - `PENDING` - Queued for execution
 - `RUNNING` - Currently executing
 - `COMPLETED` - Successfully finished
@@ -460,10 +513,12 @@ Implement complex state transitions
 ## 📖 Additional Resources
 
 ### Official Documentation
+
 - Main README: Comprehensive usage guide
 - Example Guide: Step-by-step tutorial
 
 ### Code Examples
+
 - `example/` directory: Complete working implementation
 - `*_test.go` files: Usage patterns and edge cases
 

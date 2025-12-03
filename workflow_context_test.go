@@ -1,4 +1,4 @@
-package builder_test
+package gorkflow_test
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/sicko7947/gorkflow"
-	"github.com/sicko7947/gorkflow/builder"
 	"github.com/sicko7947/gorkflow/engine"
 	"github.com/sicko7947/gorkflow/store"
 	"github.com/stretchr/testify/assert"
@@ -50,7 +49,7 @@ func TestWorkflowWithContext(t *testing.T) {
 	)
 
 	// Build workflow with context
-	wf := builder.NewWorkflow("context-test-wf", "Context Test Workflow").
+	wf := gorkflow.NewWorkflow("context-test-wf", "Context Test Workflow").
 		WithContext(customCtx).
 		ThenStep(checkContextStep).
 		MustBuild()
