@@ -21,16 +21,23 @@ func NewConditionalWorkflow() (*gorkflow.Workflow, error) {
 		return enableDoubling, nil
 	}
 
-	// Condition: Only format if EnableFormatting flag is true in state
+	// Condition: Only format if the value from the previous step is > 10
+	// This demonstrates checking the output of a previous step in the condition
 	shouldFormat := func(ctx *gorkflow.StepContext) (bool, error) {
-		var enableFormatting bool
-		if err := ctx.State.Get("enable_formatting", &enableFormatting); err != nil {
-			ctx.Logger.Warn().Err(err).Msg("Failed to get enable_formatting from state, defaulting to false")
+		var doubleOut DoubleOutput
+		// "double" is the ID of the NewDoubleStep()
+		if err := ctx.Outputs.GetOutput("double", &doubleOut); err != nil {
+			ctx.Logger.Warn().Err(err).Msg("Failed to get output from 'double' step")
 			return false, nil
 		}
 
-		ctx.Logger.Info().Bool("enable_formatting", enableFormatting).Msg("Evaluating formatting condition")
-		return enableFormatting, nil
+		// Only run if value is greater than 10
+		shouldRun := doubleOut.Value > 10
+		ctx.Logger.Info().
+			Int("value", doubleOut.Value).
+			Bool("should_run", shouldRun).
+			Msg("Evaluating formatting condition based on previous step output")
+		return shouldRun, nil
 	}
 
 	// Default output when doubling is skipped

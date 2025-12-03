@@ -7,6 +7,7 @@ This example demonstrates how to use conditional logic within a workflow using t
 The workflow processes an input value and optionally performs operations based on flags provided in the input.
 
 It showcases:
+
 - **Conditional Execution**: Using `ThenStepIf` to execute steps only when a condition is met.
 - **State Management**: Storing flags in the workflow context state for use in conditions.
 - **Default Values**: Providing default output values when a step is skipped.
@@ -14,20 +15,22 @@ It showcases:
 ## Workflow Structure
 
 1.  **Setup Step** (`setup`):
-    -   **Input**: `ConditionalInput` (Value, EnableDoubling, EnableFormatting)
-    -   **Action**: Extracts `EnableDoubling` and `EnableFormatting` flags and stores them in the workflow state (`ctx.State`). Passes `Value` to the next step.
-    -   **Output**: `DoubleInput` (Value)
 
-2.  **Double Step** (`double`) - *Conditional*:
-    -   **Condition**: Checks if `enable_doubling` is true in state.
-    -   **Action**: Multiples the value by 2.
-    -   **Default**: If skipped, returns a default object with `Value: 0` and `Doubled: false`.
-    -   **Output**: `DoubleOutput` (Value, Doubled, Message)
+    - **Input**: `ConditionalInput` (Value, EnableDoubling, EnableFormatting)
+    - **Action**: Extracts `EnableDoubling` and `EnableFormatting` flags and stores them in the workflow state (`ctx.State`). Passes `Value` to the next step.
+    - **Output**: `DoubleInput` (Value)
 
-3.  **Format Step** (`conditional_format`) - *Conditional*:
-    -   **Condition**: Checks if `enable_formatting` is true in state.
-    -   **Action**: Formats the result into a string.
-    -   **Output**: `ConditionalFormatOutput` (Value, Formatted, Doubled)
+2.  **Double Step** (`double`) - _Conditional_:
+
+    - **Condition**: Checks if `enable_doubling` is true in state.
+    - **Action**: Multiples the value by 2.
+    - **Default**: If skipped, returns a default object with `Value: 0` and `Doubled: false`.
+    - **Output**: `DoubleOutput` (Value, Doubled, Message)
+
+3.  **Format Step** (`conditional_format`) - _Conditional_:
+    - **Condition**: Checks if the output value from the `double` step is greater than 10.
+    - **Action**: Formats the result into a string.
+    - **Output**: `ConditionalFormatOutput` (Value, Formatted, Doubled)
 
 ## Data Flow
 
@@ -47,11 +50,13 @@ graph TD
 ## Running the Example
 
 1.  **Start the Server**:
+
     ```bash
     go run main/main.go
     ```
 
 2.  **Trigger the Workflow (With Doubling)**:
+
     ```bash
     curl -X POST http://localhost:3000/api/v1/workflows/conditional \
       -H "Content-Type: application/json" \
@@ -68,6 +73,7 @@ graph TD
 ## Key Code Concepts
 
 ### Conditional Builder
+
 The `ThenStepIf` method takes the step, a condition function, and a default value.
 
 ```go
@@ -83,8 +89,23 @@ builder.ThenStepIf(NewDoubleStep(), shouldDouble, doubleDefault)
 ```
 
 ### Using State
+
 The `SetupStep` puts data into the context state, which is accessible by condition functions (and other steps).
 
 ```go
 ctx.State.Set("enable_doubling", input.EnableDoubling)
+```
+
+### Checking Previous Step Output
+
+Conditions can also inspect the output of previous steps using `ctx.Outputs`.
+
+```go
+shouldFormat := func(ctx *gorkflow.StepContext) (bool, error) {
+    var doubleOut DoubleOutput
+    if err := ctx.Outputs.GetOutput("double", &doubleOut); err != nil {
+        return false, nil
+    }
+    return doubleOut.Value > 10, nil
+}
 ```
