@@ -1,666 +1,210 @@
 # Gorkflow
 
-A powerful, type-safe, and flexible workflow orchestration engine for Go with built-in state persistence, retries, and DAG-based execution.
+A powerful, type-safe workflow orchestration engine for Go with built-in state persistence, retries, and DAG-based execution.
 
-## Features
+[![Go Reference](https://pkg.go.dev/badge/github.com/sicko7947/gorkflow.svg)](https://pkg.go.dev/github.com/sicko7947/gorkflow)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-- **🎯 Type-Safe Step Definitions**: Strongly-typed input/output for workflow steps using Go generics
-- **✅ Input/Output Validation**: Built-in struct validation using `go-playground/validator/v10` with automatic error throwing
-- **📊 DAG-Based Execution**: Define workflows as directed acyclic graphs with sequential and parallel execution
-- **🔄 Built-in Retry Logic**: Configurable retry policies with linear and exponential backoff strategies
-- **💾 Persistent State Management**: Pluggable storage backends (DynamoDB and in-memory implementations included)
-- **⚡ Parallel Execution**: Execute multiple steps concurrently when they don't depend on each other
-- **🔍 Progress Tracking**: Monitor workflow execution status and step-level progress in real-time
-- **⏱️ Timeout Support**: Per-step timeout configuration to prevent hanging operations
-- **🏗️ Fluent Builder API**: Easy-to-use builder pattern for constructing complex workflows
-- **📝 Structured Logging**: Built-in integration with zerolog for comprehensive execution logs
-- **🎨 Conditional Branching**: Support for conditional step execution based on runtime data
-- **🛑 Cancellation Support**: Cancel running workflows gracefully
-- **🏷️ Tagging and Metadata**: Add custom tags and metadata to workflow runs for categorization
+📚 **[Full Documentation](https://cai139193541.gitbook.io/gorkflow/)** | [Quick Start](https://cai139193541.gitbook.io/gorkflow/getting-started/quick-start) | [Examples](example/)
 
-## Installation
+## Overview
+
+Gorkflow is a lightweight, type-safe workflow orchestration engine that makes it easy to build complex workflows in Go. Using generics for compile-time type safety and a fluent builder API, you can create robust workflows with minimal boilerplate.
+
+## ✨ Key Features
+
+- **🎯 Type-Safe** - Strongly-typed steps using Go generics
+- **✅ Auto-Validation** - Built-in input/output validation with struct tags
+- **📊 DAG-Based** - Sequential, parallel, and conditional execution
+- **🔄 Smart Retries** - Configurable retry policies with backoff strategies
+- **💾 Persistent** - Multiple storage backends (DynamoDB, LibSQL/SQLite, in-memory)
+- **⚡ Parallel** - Execute independent steps concurrently
+- **🎨 Conditional** - Dynamic workflow paths based on runtime data
+- **🏗️ Fluent API** - Easy-to-use builder pattern
+
+## 🚀 Quick Start
+
+### Installation
 
 ```bash
 go get github.com/sicko7947/gorkflow
 ```
 
-## Quick Start
-
-### 1. Define Your Step Types
+### Example
 
 ```go
 package main
 
 import (
-    "fmt"
-    workflow "github.com/sicko7947/gorkflow"
-)
-
-// Input for the workflow
-type CalculationInput struct {
-    A int `json:"a"`
-    B int `json:"b"`
-}
-
-// Output from step 1
-type SumOutput struct {
-    Sum int `json:"sum"`
-}
-
-// Output from step 2
-type ResultOutput struct {
-    Result  int    `json:"result"`
-    Message string `json:"message"`
-}
-```
-
-### 2. Create Steps with Handlers
-
-```go
-func NewAddStep() *workflow.Step[CalculationInput, SumOutput] {
-    return workflow.NewStep(
-        "add",
-        "Add Two Numbers",
-        func(ctx *workflow.StepContext, input CalculationInput) (SumOutput, error) {
-            sum := input.A + input.B
-            ctx.Logger.Info().Int("sum", sum).Msg("Addition completed")
-            return SumOutput{Sum: sum}, nil
-        },
-    )
-}
-
-func NewFormatStep() *workflow.Step[SumOutput, ResultOutput] {
-    return workflow.NewStep(
-        "format",
-        "Format Result",
-        func(ctx *workflow.StepContext, input SumOutput) (ResultOutput, error) {
-            message := fmt.Sprintf("The sum is %d", input.Sum)
-            return ResultOutput{
-                Result:  input.Sum,
-                Message: message,
-            }, nil
-        },
-        workflow.WithRetries(5),
-        workflow.WithTimeout(5*time.Second),
-    )
-}
-```
-
-### 3. Build Your Workflow
-
-```go
-import (
-    "github.com/sicko7947/gorkflow"
-)
-
-func NewCalculationWorkflow() (*workflow.Workflow, error) {
-    wf, err := builder.NewWorkflow("calculation", "Calculation Workflow").
-        WithDescription("A simple calculation workflow").
-        WithVersion("1.0").
-        WithConfig(workflow.ExecutionConfig{
-            MaxRetries:     3,
-            RetryDelayMs:   1000,
-            TimeoutSeconds: 30,
-        }).
-        Sequence(
-            NewAddStep(),
-            NewFormatStep(),
-        ).
-        Build()
-
-    if err != nil {
-        return nil, err
-    }
-
-    return wf, nil
-}
-```
-
-### 4. Execute the Workflow
-
-```go
-import (
     "context"
-    "github.com/rs/zerolog"
+    "fmt"
+    "github.com/sicko7947/gorkflow"
     "github.com/sicko7947/gorkflow/engine"
     "github.com/sicko7947/gorkflow/store"
 )
 
+// Define types
+type Input struct {
+    A int `json:"a"`
+    B int `json:"b"`
+}
+
+type Output struct {
+    Sum int `json:"sum"`
+}
+
 func main() {
-    // Create store
-    store := store.NewMemoryStore()
-
-    // Create engine with default logger and config
-    eng := engine.NewEngine(store)
-
-    // Or with custom logger and config
-    // logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
-    // eng := engine.NewEngine(store,
-    //     engine.WithLogger(logger),
-    //     engine.WithConfig(engine.DefaultEngineConfig),
-    // )
-
-    // Create workflow
-    wf, err := NewCalculationWorkflow()
-    if err != nil {
-        logger.Fatal().Err(err).Msg("Failed to create workflow")
-    }
-
-    // Start workflow
-    ctx := context.Background()
-    runID, err := eng.StartWorkflow(
-        ctx,
-        wf,
-        CalculationInput{A: 10, B: 5},
-        workflow.WithTags(map[string]string{
-            "type": "calculation",
-        }),
+    // Create a step
+    addStep := gorkflow.NewStep(
+        "add", "Add Numbers",
+        func(ctx *gorkflow.StepContext, input Input) (Output, error) {
+            return Output{Sum: input.A + input.B}, nil
+        },
     )
 
-    if err != nil {
-        logger.Fatal().Err(err).Msg("Failed to start workflow")
-    }
+    // Build workflow
+    wf, _ := gorkflow.NewWorkflow("calc", "Calculator").
+        Sequence(addStep).
+        Build()
 
-    logger.Info().Str("run_id", runID).Msg("Workflow started")
+    // Execute
+    store := store.NewMemoryStore()
+    eng := engine.NewEngine(store)
+    runID, _ := eng.StartWorkflow(context.Background(), wf, Input{A: 10, B: 5})
 
-    // Get workflow status
-    run, err := eng.GetRun(ctx, runID)
-    if err != nil {
-        logger.Fatal().Err(err).Msg("Failed to get workflow status")
-    }
-
-    logger.Info().
-        Str("status", string(run.Status)).
-        Float64("progress", run.Progress).
-        Msg("Workflow status")
+    // Get result
+    run, _ := eng.GetRun(context.Background(), runID)
+    fmt.Printf("Status: %s, Output: %s\n", run.Status, run.Output)
 }
 ```
 
-## Advanced Features
+## 📖 Documentation
 
-### Parallel Execution
+Visit our **[comprehensive documentation](https://cai139193541.gitbook.io/gorkflow/)** for:
 
-Execute multiple independent steps in parallel:
+- **[Getting Started](https://cai139193541.gitbook.io/gorkflow/getting-started/installation)** - Installation, quick start, and tutorials
+- **[Core Concepts](https://cai139193541.gitbook.io/gorkflow/core-concepts/workflows)** - Workflows, steps, validation, state management
+- **[Advanced Usage](https://cai139193541.gitbook.io/gorkflow/advanced-usage/parallel-execution)** - Parallel execution, conditionals, error handling
+- **[Storage Backends](https://cai139193541.gitbook.io/gorkflow/storage/overview)** - DynamoDB, LibSQL, in-memory stores
+- **[API Reference](https://cai139193541.gitbook.io/gorkflow/api-reference/workflow-builder)** - Complete API documentation
 
-```go
-wf, err := builder.NewWorkflow("parallel-example", "Parallel Example").
-    Parallel(
-        NewStep1(),
-        NewStep2(),
-        NewStep3(),
-    ).
-    ThenStep(NewMergeStep()).
-    Build()
+## 💡 Examples
+
+Check out the [examples/](example/) directory for complete, runnable examples:
+
+- **[Sequential](example/sequential/)** - Basic sequential workflow
+- **[Parallel](example/parallel/)** - Parallel step execution
+- **[Conditional](example/conditional/)** - Runtime conditional logic
+- **[Validation](example/validation/)** - Input/output validation
+- **[LibSQL Persistence](example/libsql_persistence/)** - Persistent storage
+
+## 🏗️ Architecture
+
+```
+┌─────────────┐
+│  Workflow   │  Define your workflow with type-safe steps
+└──────┬──────┘
+       │
+       ↓
+┌─────────────┐
+│   Engine    │  Orchestrates execution with retries
+└──────┬──────┘
+       │
+       ↓
+┌─────────────┐
+│    Store    │  Persists state (Memory/DynamoDB/LibSQL)
+└─────────────┘
 ```
 
-### Retry Configuration
+## 🔧 Core Concepts
 
-Configure step-specific retry behavior:
+### Type-Safe Steps
 
 ```go
-step := workflow.NewStep(
-    "retry-example",
-    "Step with Custom Retry",
-    handler,
-    workflow.WithRetries(5),
-    workflow.WithBackoff(workflow.BackoffExponential),
-    workflow.WithTimeout(10*time.Second),
+step := gorkflow.NewStep(
+    "process",
+    "Process Data",
+    func(ctx *gorkflow.StepContext, input UserInput) (UserOutput, error) {
+        // Fully type-safe - input and output are validated
+        return UserOutput{UserID: "123"}, nil
+    },
+    gorkflow.WithRetries(3),
+    gorkflow.WithTimeout(30 * time.Second),
 )
 ```
 
-### Conditional Execution
+### Workflow Patterns
 
-Execute steps conditionally based on runtime evaluation:
+**Sequential:**
 
 ```go
-// Define a condition function
-condition := func(ctx *workflow.StepContext) (bool, error) {
-    // Access state or previous step outputs
-    var shouldProcess bool
-    ctx.State.Get("should_process", &shouldProcess)
-    return shouldProcess, nil
-}
-
-// Builder-level API (recommended)
-processStep := workflow.NewStep("process", "Process Data", processHandler)
-
-wf, err := builder.NewWorkflow("conditional-workflow", "Conditional Workflow").
-    ThenStep(checkStep).
-    ThenStepIf(processStep, condition, nil).  // ← Builder-level conditional
-    ThenStep(finalStep).
-    Build()
-
-// Alternative: Step-level API (for type-safe default values)
-baseStep := workflow.NewStep("process", "Process Data", processHandler)
-defaultOutput := &ProcessOutput{Status: "skipped"}
-conditionalStep := workflow.NewConditionalStep(baseStep, condition, defaultOutput)
-
-wf, err := builder.NewWorkflow("conditional-workflow", "Conditional Workflow").
-    ThenStep(checkStep).
-    ThenStep(conditionalStep).
+wf, _ := gorkflow.NewWorkflow("seq", "Sequential").
+    Sequence(step1, step2, step3).
     Build()
 ```
 
-**How it works:**
-
-- Condition is evaluated before step execution
-- Step executes only if condition returns `true`
-- If `false`, uses default value (or zero value if nil)
-- Condition errors propagate and fail the workflow
-
-### State Management
-
-Access and modify workflow state during execution:
+**Parallel:**
 
 ```go
-func handler(ctx *workflow.StepContext, input MyInput) (MyOutput, error) {
-    // Get state accessor
-    state := ctx.State
-
-    // Set state
-    state.Set(ctx.Context, "counter", 42)
-
-    // Get state
-    counter, err := state.Get(ctx.Context, "counter")
-
-    // Access previous step output
-    outputs := ctx.Outputs
-    prevOutput, err := outputs.Get(ctx.Context, "previous-step-id")
-
-    return MyOutput{}, nil
-}
+wf, _ := gorkflow.NewWorkflow("parallel", "Parallel").
+    Parallel(stepA, stepB, stepC).
+    ThenStep(aggregateStep).
+    Build()
 ```
 
-### Cancellation
-
-Cancel a running workflow:
+**Conditional:**
 
 ```go
-err := eng.Cancel(ctx, runID)
-if err != nil {
-    logger.Error().Err(err).Msg("Failed to cancel workflow")
-}
-```
-
-### Input/Output Validation
-
-**Validation is enabled by default!** Just add validation tags to your structs using `go-playground/validator/v10`:
-
-```go
-// Define types with validation tags
-type UserInput struct {
-    Email    string `json:"email" validate:"required,email"`
-    Username string `json:"username" validate:"required,min=3,max=20,alphanum"`
-    Age      int    `json:"age" validate:"required,gte=18,lte=120"`
+condition := func(ctx *gorkflow.StepContext) (bool, error) {
+    var flag bool
+    ctx.State.Get("process_data", &flag)
+    return flag, nil
 }
 
-type UserOutput struct {
-    UserID string `json:"userId" validate:"required,uuid4"`
-    Email  string `json:"email" validate:"required,email"`
-}
-
-// Create step - validation happens automatically!
-step := workflow.NewStep(
-    "create_user",
-    "Create User",
-    handler,
-    // No configuration needed - validation is automatic!
-)
-```
-
-**Validation happens automatically:**
-
-- ✅ Input is validated **before** the step handler executes
-- ✅ Output is validated **after** the step handler executes
-- ❌ Validation errors throw detailed error messages and stop execution
-
-**Example error:**
-
-```
-validation failed:
-  - field 'Email' failed on 'email' tag: got value 'invalid'
-  - field 'Age' failed on 'gte' tag (param: 18): got value '16'
-```
-
-**To disable validation** (if needed):
-
-```go
-step := workflow.NewStep(
-    "my_step", "My Step", handler,
-    workflow.WithoutValidation(), // Explicitly disable
-)
-```
-
-**See also:**
-
-- [Validation Example](example/validation/) - Complete working example
-- [Quick Reference](VALIDATION_QUICK_REF.md) - Common validation tags
-- [go-playground/validator docs](https://github.com/go-playground/validator)
-
-Cancel a running workflow:
-
-```go
-err := eng.Cancel(ctx, runID)
-if err != nil {
-    logger.Error().Err(err).Msg("Failed to cancel workflow")
-}
-```
-
-### Custom Context
-
-Pass a custom context struct to your workflow, accessible by all steps:
-
-```go
-// Define your context
-type MyContext struct {
-    UserID string
-    TraceID string
-}
-
-// Create workflow with context
-wf := builder.NewWorkflow("my-wf", "My Workflow").
-    WithContext(MyContext{UserID: "123", TraceID: "abc"}).
-    ThenStep(myStep).
-    MustBuild()
-
-// Access in step
-func myStepHandler(ctx *workflow.StepContext, input string) (string, error) {
-    myCtx, err := workflow.GetContext[MyContext](ctx)
-    if err != nil {
-        return "", err
-    }
-    // Use myCtx.UserID, etc.
-    return "ok", nil
-}
-```
-
-## Architecture
-
-### Core Components
-
-- **`workflow.Workflow`**: The workflow definition containing steps, execution graph, and configuration
-- **`workflow.Step[TIn, TOut]`**: Type-safe step definition with input/output types
-- **`engine.Engine`**: Orchestrates workflow execution, handles retries, and manages state transitions
-- **`ExecutionGraph`**: DAG representation of workflow steps and their dependencies
-- **`WorkflowStore`**: Persistence layer interface for storing workflow runs and step executions
-
-### Execution Flow
-
-```
-1. StartWorkflow() → Create WorkflowRun
-2. Engine.executeWorkflow() → Traverse execution graph
-3. For each step:
-   - Create StepExecution
-   - Execute handler with retries
-   - Store output
-   - Update progress
-4. Complete workflow → Update final status
+wf, _ := gorkflow.NewWorkflow("cond", "Conditional").
+    ThenStepIf(processStep, condition, nil).
+    Build()
 ```
 
 ### Storage Backends
 
-#### DynamoDB Store
+| Backend      | Use Case                | Setup                                     |
+| ------------ | ----------------------- | ----------------------------------------- |
+| **Memory**   | Development, Testing    | `store.NewMemoryStore()`                  |
+| **LibSQL**   | Small-Medium Apps, Edge | `store.NewLibSQLStore("file:./db")`       |
+| **DynamoDB** | Large-Scale, Cloud      | `store.NewDynamoDBStore(client, "table")` |
 
-Persistent storage using AWS DynamoDB:
+See [Storage Documentation](https://cai139193541.gitbook.io/gorkflow/storage/overview) for details.
 
-```go
-import (
-    "github.com/sicko7947/gorkflow/store"
-    "github.com/aws/aws-sdk-go-v2/config"
-    "github.com/aws/aws-sdk-go-v2/service/dynamodb"
-)
+## 📦 Requirements
 
-cfg, _ := config.LoadDefaultConfig(context.Background())
-client := dynamodb.NewFromConfig(cfg)
+- **Go 1.21+** (uses generics)
+- Optional: AWS SDK v2 (for DynamoDB)
+- Optional: LibSQL client (for SQLite/Turso)
 
-store, err := store.NewDynamoDBStore(client, "workflow-table")
-```
+## 🤝 Contributing
 
-**Setting up DynamoDB Table**
-
-Use the included helper scripts to manage your DynamoDB table. The scripts accept configuration via environment variables:
-
-**Environment Variables:**
-
-- `AWS_REGION` - AWS region (default: `ap-southeast-2`)
-- `AWS_DYNAMODB_TABLE_NAME` - Table name (default: `workflow_executions`)
-
-**Usage:**
-
-```bash
-# Using defaults (ap-southeast-2 region, workflow_executions table)
-./scripts/create-dynamodb-table.sh
-
-# Custom region and table name
-export AWS_REGION=us-east-1
-export AWS_DYNAMODB_TABLE_NAME=my_workflow_table
-./scripts/create-dynamodb-table.sh
-
-# Or inline
-AWS_REGION=eu-west-1 AWS_DYNAMODB_TABLE_NAME=workflows ./scripts/create-dynamodb-table.sh
-
-# Delete table (prompts for confirmation)
-./scripts/delete-dynamodb-table.sh
-```
-
-**What the create script does:**
-
-- Creates a table with Single Table Design (PK/SK pattern)
-- Adds 2 Global Secondary Indexes (GSI1, GSI2) for flexible querying
-- Enables TTL on the `ttl` attribute for automatic cleanup
-- Uses PAY_PER_REQUEST billing mode
-- Tags the table with project metadata
-
-#### LibSQL / SQLite Store
-
-Persistent storage using LibSQL (compatible with SQLite and Turso):
-
-```go
-import (
-    "github.com/sicko7947/gorkflow/store"
-)
-
-// Local SQLite file
-store, err := store.NewLibSQLStore("file:./workflow.db")
-
-// Remote Turso database
-// store, err := store.NewLibSQLStore("libsql://my-db-user.turso.io?authToken=...")
-```
-
-The LibSQL store automatically creates the necessary tables (`workflow_runs`, `step_executions`, `step_outputs`, `workflow_state`) if they don't exist.
-
-#### Memory Store
-
-In-memory storage for testing and development:
-
-```go
-store := store.NewMemoryStore()
-```
-
-## Package Structure
-
-```
-gorkflow/
-├── builder/          # Fluent API for building workflows
-│   ├── builder.go    # WorkflowBuilder implementation
-│   ├── options.go    # Builder options
-│   └── validation.go # Workflow validation
-├── engine/           # Workflow execution engine
-│   ├── engine.go     # Main engine implementation
-│   ├── executor.go   # Step execution logic
-│   ├── traverser.go  # Graph traversal
-│   ├── backoff.go    # Retry backoff strategies
-│   └── *_test.go     # Engine tests
-├── store/            # Persistence layer
-│   ├── store.go      # Store interface
-│   ├── memory.go     # In-memory implementation
-│   ├── dynamodb.go   # DynamoDB implementation
-│   └── schema.go     # Data models
-├── example/          # Example implementations
-│   ├── README.md     # Example overview and usage guide
-│   ├── simple_math/  # Simple sequential workflow example
-│   │   ├── workflow.go      # Workflow definition
-│   │   ├── steps.go         # Step implementations
-│   │   ├── orchestrator.go  # Workflow orchestrator
-│   │   ├── types.go         # Type definitions
-│   │   └── README.md        # Example-specific guide
-│   └── conditional/  # Conditional execution example
-│       ├── workflow.go      # Conditional workflow definition
-│       ├── steps.go         # Conditional step implementations
-│       ├── orchestrator.go  # Workflow orchestrator
-│       ├── types.go         # Type definitions
-│       └── README.md        # Example-specific guide
-├── workflow.go       # Workflow definition
-├── step.go           # Step definition and execution
-├── graph.go          # Execution graph
-├── models.go         # Core data models
-├── config.go         # Configuration types
-├── context.go        # Execution context
-├── errors.go         # Error types
-└── store_interface.go # Store interface definition
-```
-
-## Examples
-
-The [example/](example/) directory contains complete working examples demonstrating different workflow patterns:
-
-### Simple Math Workflow
-
-Located in [example/simple_math/](example/simple_math/), demonstrates:
-
-- Sequential step execution
-- Data passing between steps
-- Type-safe step definitions
-- Step configuration (retries, timeouts)
-- Workflow orchestration
-
-### Conditional Workflow
-
-Located in [example/conditional/](example/conditional/), demonstrates:
-
-- Conditional step execution with `ThenStepIf`
-- Runtime condition evaluation from workflow state
-- Default values for skipped steps
-- Dynamic workflow paths based on input flags
-
-To explore the examples:
-
-```bash
-cd example/
-cat README.md  # Read the example overview
-
-cd simple_math/
-cat README.md  # Simple math workflow guide
-
-cd ../conditional/
-cat README.md  # Conditional workflow guide
-```
-
-## Configuration
-
-### Workflow-Level Configuration
-
-Set default execution parameters for all steps:
-
-```go
-builder.NewWorkflow("my-workflow", "My Workflow").
-    WithConfig(workflow.ExecutionConfig{
-        MaxRetries:      3,
-        RetryDelayMs:    1000,
-        RetryBackoff:    workflow.BackoffLinear,
-        TimeoutSeconds:  30,
-        ContinueOnError: false,
-    })
-```
-
-### Step-Level Configuration
-
-Override workflow defaults for specific steps:
-
-```go
-workflow.NewStep(
-    "my-step",
-    "My Step",
-    handler,
-    workflow.WithRetries(5),
-    workflow.WithBackoff(workflow.BackoffExponential),
-    workflow.WithTimeout(60*time.Second),
-)
-```
-
-### Engine Configuration
-
-Configure the execution engine with optional parameters:
-
-```go
-// Simple: Use defaults (stdout logger at Info level, DefaultEngineConfig)
-eng := engine.NewEngine(store)
-
-// Custom logger only
-logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
-eng := engine.NewEngine(store, engine.WithLogger(logger))
-
-// Custom config only
-eng := engine.NewEngine(store, engine.WithConfig(engine.EngineConfig{
-    MaxConcurrentWorkflows: 10,
-    DefaultTimeout:         5 * time.Minute,
-}))
-
-// Both custom logger and config
-eng := engine.NewEngine(store,
-    engine.WithLogger(logger),
-    engine.WithConfig(customConfig),
-)
-```
-
-## Testing
-
-Run tests:
-
-```bash
-# Run all tests
-go test ./...
-
-# Run tests with coverage
-go test -cover ./...
-
-# Run integration tests (requires DynamoDB)
-go test -tags=integration ./store/...
-```
-
-## Requirements
-
-- **Go**: 1.21 or higher (uses generics)
-- **AWS SDK v2**: For DynamoDB store integration
-- **zerolog**: For structured logging
-
-## Dependencies
-
-```go
-require (
-    github.com/aws/aws-sdk-go-v2 v1.40.0
-    github.com/aws/aws-sdk-go-v2/service/dynamodb v1.53.1
-    github.com/google/uuid v1.6.0
-    github.com/rs/zerolog v1.34.0
-)
-```
-
-## Contributing
+Contributions welcome! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
 
-## License
+## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) for details.
 
-## Acknowledgments
+## 🙏 Acknowledgments
 
-Extracted from the Tendor Email Agent project and refactored into a standalone, reusable workflow engine library.
+Extracted from the Tendor Email Agent project and refactored into a standalone workflow engine library.
 
-## Support
+## 📞 Support
 
-For issues, questions, or contributions, please open an issue on GitHub.
+- **Documentation**: https://cai139193541.gitbook.io/gorkflow/
+- **Issues**: https://github.com/sicko7947/gorkflow/issues
+- **Discussions**: https://github.com/sicko7947/gorkflow/discussions
+
+---
+
+**Ready to build powerful workflows?** Check out the [Quick Start Guide](https://cai139193541.gitbook.io/gorkflow/getting-started/quick-start)! 🚀
