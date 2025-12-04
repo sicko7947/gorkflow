@@ -1,9 +1,15 @@
 package gorkflow
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
+)
+
+var (
+	// ErrStepSkipped indicates that a step was skipped due to a condition
+	ErrStepSkipped = errors.New("step skipped")
 )
 
 // Error codes
@@ -20,10 +26,10 @@ const (
 
 // WorkflowError represents an error during workflow execution
 type WorkflowError struct {
-	Message   string    `json:"message" dynamodbav:"message"`
-	Code      string    `json:"code" dynamodbav:"code"`
-	Step      string    `json:"step,omitempty" dynamodbav:"step,omitempty"`
-	Timestamp time.Time `json:"timestamp" dynamodbav:"timestamp"`
+	Message   string                 `json:"message" dynamodbav:"message"`
+	Code      string                 `json:"code" dynamodbav:"code"`
+	Step      string                 `json:"step,omitempty" dynamodbav:"step,omitempty"`
+	Timestamp time.Time              `json:"timestamp" dynamodbav:"timestamp"`
 	Details   map[string]interface{} `json:"details,omitempty" dynamodbav:"details,omitempty"`
 }
 

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 // StepExecutionResult holds the result of a step execution
 type StepExecutionResult struct {
 	StepID       string
+	Status       gorkflow.StepStatus
 	Output       []byte
 	Error        error
 	DurationMs   int64
@@ -123,6 +125,33 @@ func (e *Engine) executeStep(
 		duration := time.Since(startTime)
 		stepExec.DurationMs = duration.Milliseconds()
 
+		// Check if step was skipped
+		if errors.Is(lastErr, gorkflow.ErrStepSkipped) {
+			stepExec.Status = gorkflow.StepStatusSkipped
+			stepExec.Output = outputBytes
+			completedAt := time.Now()
+			stepExec.CompletedAt = &completedAt
+			stepExec.UpdatedAt = completedAt
+
+			if err := e.store.UpdateStepExecution(ctx, stepExec); err != nil {
+				gorkflow.LogPersistenceError(e.logger, run.RunID, "update_step_execution_skipped", err)
+			}
+
+			// Save output for downstream steps (even if skipped, we might have pass-through output)
+			if err := e.store.SaveStepOutput(ctx, run.RunID, step.GetID(), outputBytes); err != nil {
+				gorkflow.LogPersistenceError(e.logger, run.RunID, "save_step_output_skipped", err)
+			}
+
+			return &StepExecutionResult{
+				StepID:       step.GetID(),
+				Status:       gorkflow.StepStatusSkipped,
+				Output:       outputBytes,
+				Error:        nil,
+				DurationMs:   duration.Milliseconds(),
+				AttemptsMade: attemptsMade,
+			}, nil
+		}
+
 		if lastErr == nil {
 			// Success
 			stepExec.Status = gorkflow.StepStatusCompleted
@@ -144,6 +173,7 @@ func (e *Engine) executeStep(
 
 			return &StepExecutionResult{
 				StepID:       step.GetID(),
+				Status:       gorkflow.StepStatusCompleted,
 				Output:       outputBytes,
 				Error:        nil,
 				DurationMs:   duration.Milliseconds(),
@@ -184,6 +214,7 @@ func (e *Engine) executeStep(
 
 	return &StepExecutionResult{
 		StepID:       step.GetID(),
+		Status:       gorkflow.StepStatusFailed,
 		Output:       nil,
 		Error:        lastErr,
 		DurationMs:   stepExec.DurationMs,

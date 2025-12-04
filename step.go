@@ -323,9 +323,17 @@ func (w *conditionalStepWrapper) Execute(ctx *StepContext, inputBytes []byte) ([
 		if w.defaultValue != nil {
 			return json.Marshal(w.defaultValue)
 		}
+
+		// If input type matches output type, pass through the input
+		// This allows chaining conditional steps without losing the previous output
+		if w.step.InputType() == w.step.OutputType() {
+			return inputBytes, nil
+		}
+
 		// Return zero value for the output type
 		zeroVal := reflect.Zero(w.step.OutputType()).Interface()
-		return json.Marshal(zeroVal)
+		bytes, _ := json.Marshal(zeroVal)
+		return bytes, ErrStepSkipped
 	}
 
 	// Execute the wrapped step

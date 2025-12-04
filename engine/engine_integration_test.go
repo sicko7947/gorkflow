@@ -416,3 +416,60 @@ func TestEngine_WorkflowState(t *testing.T) {
 	assert.Contains(t, allState, "timestamp")
 	assert.Contains(t, allState, "query")
 }
+
+func TestEngine_ConditionalStep_Skipped_PassThrough(t *testing.T) {
+	engine, _ := createTestEngine(t)
+
+	// Step 1: Returns "step1 output"
+	step1 := gorkflow.NewStep("step1", "Step 1", func(ctx *gorkflow.StepContext, input any) (string, error) {
+		return "step1 output", nil
+	})
+
+	// Step 2: Takes string, returns "step2 output"
+	step2 := gorkflow.NewStep("step2", "Step 2", func(ctx *gorkflow.StepContext, input string) (string, error) {
+		return "step2 output", nil
+	})
+
+	// Condition: Always false
+	condition := func(ctx *gorkflow.StepContext) (bool, error) {
+		return false, nil
+	}
+
+	// Build workflow
+	wf, err := gorkflow.NewWorkflow("test_wf", "Test Workflow").
+		ThenStep(step1).
+		ThenStepIf(step2, condition, nil).
+		Build()
+	require.NoError(t, err)
+
+	// Execute
+	runID, err := engine.StartWorkflow(context.Background(), wf, nil)
+	require.NoError(t, err)
+
+	// Wait for completion
+	run := waitForCompletion(t, engine, runID, 10*time.Second)
+	assert.Equal(t, gorkflow.RunStatusCompleted, run.Status)
+
+	// Get step executions
+	steps, err := engine.GetStepExecutions(context.Background(), runID)
+	require.NoError(t, err)
+
+	// Find step2 execution
+	var step2Exec *gorkflow.StepExecution
+	for _, s := range steps {
+		if s.StepID == "step2" {
+			step2Exec = s
+			break
+		}
+	}
+	require.NotNil(t, step2Exec)
+	// Since we treat pass-through as a successful completion (providing output),
+	// the status is now COMPLETED.
+	assert.Equal(t, gorkflow.StepStatusCompleted, step2Exec.Status)
+
+	// Verify output of step2 matches step1 output (pass-through)
+	var output string
+	err = json.Unmarshal(step2Exec.Output, &output)
+	require.NoError(t, err)
+	assert.Equal(t, "step1 output", output)
+}

@@ -235,7 +235,7 @@ func (e *Engine) executeWorkflow(ctx context.Context, wf *gorkflow.Workflow, run
 		}
 
 		// Execute step
-		_, err = e.executeStep(ctx, run, step, stepInput, outputs, state, wf.GetContext(), completedSteps)
+		result, err := e.executeStep(ctx, run, step, stepInput, outputs, state, wf.GetContext(), completedSteps)
 		if err != nil {
 			// Check if we should continue on error
 			if step.GetConfig().ContinueOnError {
@@ -250,6 +250,12 @@ func (e *Engine) executeWorkflow(ctx context.Context, wf *gorkflow.Workflow, run
 					Msg("Step failed, stopping workflow")
 				return e.failWorkflow(ctx, run, err)
 			}
+		}
+
+		// Update workflow output if step completed successfully
+		// If step was skipped (and didn't provide a default/pass-through), we keep the previous output
+		if result != nil && result.Status == gorkflow.StepStatusCompleted {
+			run.Output = result.Output
 		}
 
 		completedSteps++
