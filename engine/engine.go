@@ -211,26 +211,43 @@ func (e *Engine) executeWorkflow(ctx context.Context, wf *gorkflow.Workflow, run
 			stepInput = run.Input
 		} else {
 			// Subsequent steps: get output from previous step
-			// This assumes a linear chain for now. For complex graphs, we need to resolve dependencies.
-			prevStepID := executionOrder[completedSteps-1]
-			var err error
-			stepInput, err = e.store.LoadStepOutput(ctx, run.RunID, prevStepID)
+			// Resolve dependencies from the graph to support parallel execution
+			prevSteps, err := wf.Graph().GetPreviousSteps(stepID)
 			if err != nil {
-				// Check if previous step had ContinueOnError set
-				prevStep, stepErr := wf.GetStep(prevStepID)
-				if stepErr == nil && prevStep.GetConfig().ContinueOnError {
-					workflowLogger.Warn().
-						Str("prev_step_id", prevStepID).
-						Msg("Previous step output not found, but ContinueOnError is true. Passing empty input.")
-					// Pass JSON null so unmarshaling works (results in zero value)
-					stepInput = []byte("null")
-				} else {
-					workflowLogger.Error().
-						Err(err).
-						Str("prev_step_id", prevStepID).
-						Msg("Failed to load output from previous step")
-					return e.failWorkflow(ctx, run, err)
+				workflowLogger.Error().Err(err).Str("step_id", stepID).Msg("Failed to resolve previous steps")
+				return e.failWorkflow(ctx, run, err)
+			}
+
+			// If step has parents, use direct parent output
+			// Note: Currently we only support single input, so we take the first parent's output.
+			// This correctly handles:
+			// 1. Linear chains (A -> B): B gets A's output
+			// 2. Parallel fan-out (A -> [B, C]): B gets A's output, C gets A's output
+			// It does NOT yet support aggregating inputs from multiple parents.
+			if len(prevSteps) > 0 {
+				prevStepID := prevSteps[0]
+				var err error
+				stepInput, err = e.store.LoadStepOutput(ctx, run.RunID, prevStepID)
+				if err != nil {
+					// Check if previous step had ContinueOnError set
+					prevStep, stepErr := wf.GetStep(prevStepID)
+					if stepErr == nil && prevStep.GetConfig().ContinueOnError {
+						workflowLogger.Warn().
+							Str("prev_step_id", prevStepID).
+							Msg("Previous step output not found, but ContinueOnError is true. Passing empty input.")
+						// Pass JSON null so unmarshaling works (results in zero value)
+						stepInput = []byte("null")
+					} else {
+						workflowLogger.Error().
+							Err(err).
+							Str("prev_step_id", prevStepID).
+							Msg("Failed to load output from previous step")
+						return e.failWorkflow(ctx, run, err)
+					}
 				}
+			} else {
+				// No parents found (should technically be unreachable for non-entry nodes in valid graph)
+				workflowLogger.Warn().Str("step_id", stepID).Msg("Step has no parents but is not the first executed step")
 			}
 		}
 

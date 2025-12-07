@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -472,4 +473,45 @@ func TestEngine_ConditionalStep_Skipped_PassThrough(t *testing.T) {
 	err = json.Unmarshal(step2Exec.Output, &output)
 	require.NoError(t, err)
 	assert.Equal(t, "step1 output", output)
+}
+
+func TestEngine_ParallelStepExecution(t *testing.T) {
+	engine, _ := createTestEngine(t)
+
+	// Step A: Returns "output-A"
+	stepA := gorkflow.NewStep("A", "Step A", func(ctx *gorkflow.StepContext, input any) (string, error) {
+		return "output-A", nil
+	})
+
+	// Step B: Expects "output-A"
+	stepB := gorkflow.NewStep("B", "Step B", func(ctx *gorkflow.StepContext, input string) (string, error) {
+		if input != "output-A" {
+			return "", fmt.Errorf("step B expected 'output-A', got '%s'", input)
+		}
+		return "output-B", nil
+	})
+
+	// Step C: Expects "output-A"
+	stepC := gorkflow.NewStep("C", "Step C", func(ctx *gorkflow.StepContext, input string) (string, error) {
+		if input != "output-A" {
+			return "", fmt.Errorf("step C expected 'output-A', got '%s'", input)
+		}
+		return "output-C", nil
+	})
+
+	wf, err := gorkflow.NewWorkflow("parallel_test", "Parallel Test").
+		ThenStep(stepA).
+		Parallel(stepB, stepC).
+		Build()
+	require.NoError(t, err)
+
+	runID, err := engine.StartWorkflow(context.Background(), wf, nil)
+	require.NoError(t, err)
+
+	run := waitForCompletion(t, engine, runID, 10*time.Second)
+	assert.Equal(t, gorkflow.RunStatusCompleted, run.Status)
+
+	if run.Status == gorkflow.RunStatusFailed {
+		t.Logf("Workflow failed: %s", run.Error.Message)
+	}
 }

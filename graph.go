@@ -200,6 +200,24 @@ func (g *ExecutionGraph) GetNextSteps(stepID string) ([]string, error) {
 	return node.Next, nil
 }
 
+// GetPreviousSteps returns the steps that lead to the given step
+func (g *ExecutionGraph) GetPreviousSteps(stepID string) ([]string, error) {
+	if _, exists := g.Nodes[stepID]; !exists {
+		return nil, fmt.Errorf("step %s not found in graph", stepID)
+	}
+
+	var previous []string
+	for id, node := range g.Nodes {
+		for _, nextID := range node.Next {
+			if nextID == stepID {
+				previous = append(previous, id)
+				break
+			}
+		}
+	}
+	return previous, nil
+}
+
 // IsTerminal returns true if the step has no outgoing edges
 func (g *ExecutionGraph) IsTerminal(stepID string) bool {
 	node, exists := g.Nodes[stepID]
