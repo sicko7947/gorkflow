@@ -118,12 +118,7 @@ func (e *Engine) StartWorkflow(
 		Input:           inputBytes,
 		Context:         contextBytes,
 		ResourceID:      options.ResourceID,
-		Trigger: &gorkflow.TriggerInfo{
-			Type:      options.TriggerType,
-			Source:    options.TriggerSource,
-			Timestamp: now,
-		},
-		Tags: options.Tags,
+		Tags:            options.Tags,
 	}
 
 	// Set TTL if specified

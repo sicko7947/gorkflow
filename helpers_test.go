@@ -11,12 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func createTestWorkflow(t *testing.T) *gorkflow.Workflow {
-	wf, err := gorkflow.NewWorkflow("test-wf", "Test Workflow").Build()
-	require.NoError(t, err)
-	return wf
-}
-
 type TestRunContext struct {
 	UserID    string
 	RequestID string

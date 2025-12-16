@@ -74,7 +74,6 @@ type WorkflowRun struct {
 
 	// Metadata
 	ResourceID string            `json:"resourceId,omitempty" dynamodbav:"resource_id,omitempty"`
-	Trigger    *TriggerInfo      `json:"trigger,omitempty" dynamodbav:"trigger,omitempty"`
 	Tags       map[string]string `json:"tags,omitempty" dynamodbav:"tags,omitempty"`
 
 	// Custom context (serialized as JSON bytes)
@@ -82,14 +81,6 @@ type WorkflowRun struct {
 
 	// DynamoDB TTL
 	TTL int64 `json:"-" dynamodbav:"ttl,omitempty"`
-}
-
-// TriggerInfo captures what initiated the workflow
-type TriggerInfo struct {
-	Type      string            `json:"type" dynamodbav:"type"`     // "api", "schedule", "event"
-	Source    string            `json:"source" dynamodbav:"source"` // User ID, system name, etc.
-	Timestamp time.Time         `json:"timestamp" dynamodbav:"timestamp"`
-	Metadata  map[string]string `json:"metadata,omitempty" dynamodbav:"metadata,omitempty"`
 }
 
 // StepExecution tracks individual step execution within a workflow run

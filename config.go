@@ -116,9 +116,8 @@ type StartOptions struct {
 	CheckConcurrency bool
 	TTL              time.Duration
 	Tags             map[string]string
-	TriggerType      string
-	TriggerSource    string
-	Synchronous      bool
+
+	Synchronous bool
 }
 
 // WithResourceID sets the resource ID for concurrency control
@@ -146,14 +145,6 @@ func WithTTL(ttl time.Duration) StartOption {
 func WithTags(tags map[string]string) StartOption {
 	return func(opts *StartOptions) {
 		opts.Tags = tags
-	}
-}
-
-// WithTrigger sets the trigger type and source
-func WithTrigger(triggerType, source string) StartOption {
-	return func(opts *StartOptions) {
-		opts.TriggerType = triggerType
-		opts.TriggerSource = source
 	}
 }
 

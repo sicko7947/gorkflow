@@ -175,12 +175,3 @@ func TestDefaultEngineConfig(t *testing.T) {
 	assert.Equal(t, 10, config.MaxConcurrentWorkflows)
 	assert.Equal(t, 5*time.Minute, config.DefaultTimeout)
 }
-
-func TestWithTrigger(t *testing.T) {
-	opts := &StartOptions{}
-	opt := WithTrigger("api", "user-123")
-	opt(opts)
-
-	assert.Equal(t, "api", opts.TriggerType)
-	assert.Equal(t, "user-123", opts.TriggerSource)
-}
