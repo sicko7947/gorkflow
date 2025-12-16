@@ -149,6 +149,14 @@ func WithTags(tags map[string]string) StartOption {
 	}
 }
 
+// WithTrigger sets the trigger type and source
+func WithTrigger(triggerType, source string) StartOption {
+	return func(opts *StartOptions) {
+		opts.TriggerType = triggerType
+		opts.TriggerSource = source
+	}
+}
+
 // WithSynchronousExecution enables synchronous execution
 func WithSynchronousExecution() StartOption {
 	return func(opts *StartOptions) {
