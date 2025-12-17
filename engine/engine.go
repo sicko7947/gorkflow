@@ -16,19 +16,7 @@ import (
 type Engine struct {
 	store  gorkflow.WorkflowStore
 	logger zerolog.Logger
-	config EngineConfig
-}
-
-// EngineConfig holds engine configuration
-type EngineConfig struct {
-	MaxConcurrentWorkflows int
-	DefaultTimeout         time.Duration
-}
-
-// DefaultEngineConfig provides sensible defaults
-var DefaultEngineConfig = EngineConfig{
-	MaxConcurrentWorkflows: 10,
-	DefaultTimeout:         5 * time.Minute,
+	config gorkflow.EngineConfig
 }
 
 // NewEngine creates a new workflow engine
@@ -43,7 +31,7 @@ func WithLogger(logger zerolog.Logger) EngineOption {
 }
 
 // WithConfig sets a custom configuration for the engine
-func WithConfig(config EngineConfig) EngineOption {
+func WithConfig(config gorkflow.EngineConfig) EngineOption {
 	return func(e *Engine) {
 		e.config = config
 	}
@@ -63,7 +51,7 @@ func NewEngine(store gorkflow.WorkflowStore, opts ...EngineOption) *Engine {
 	eng := &Engine{
 		store:  store,
 		logger: defaultLogger,
-		config: DefaultEngineConfig,
+		config: gorkflow.DefaultEngineConfig,
 	}
 
 	// Apply options

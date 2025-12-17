@@ -96,54 +96,6 @@ func (e *StepError) WithDetails(details map[string]interface{}) *StepError {
 	return e
 }
 
-// Helper functions to convert Go errors to workflow errors
-func toWorkflowError(err error) *WorkflowError {
-	if err == nil {
-		return nil
-	}
-
-	// Check if already a WorkflowError
-	if we, ok := err.(*WorkflowError); ok {
-		return we
-	}
-
-	// Create new error
-	return &WorkflowError{
-		Message:   err.Error(),
-		Code:      ErrCodeInternalError,
-		Timestamp: time.Now(),
-	}
-}
-
-func toStepError(err error, attempt int) *StepError {
-	if err == nil {
-		return nil
-	}
-
-	// Check if already a StepError
-	if se, ok := err.(*StepError); ok {
-		return se
-	}
-
-	// Check for timeout
-	if strings.Contains(err.Error(), "context deadline exceeded") {
-		return &StepError{
-			Message:   "Step execution timed out",
-			Code:      ErrCodeTimeout,
-			Timestamp: time.Now(),
-			Attempt:   attempt,
-		}
-	}
-
-	// Create new error
-	return &StepError{
-		Message:   err.Error(),
-		Code:      ErrCodeExecutionFailed,
-		Timestamp: time.Now(),
-		Attempt:   attempt,
-	}
-}
-
 // IsConcurrencyError checks if an error is a concurrency limit error
 func IsConcurrencyError(err error) bool {
 	if err == nil {

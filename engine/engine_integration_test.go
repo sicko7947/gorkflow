@@ -100,7 +100,7 @@ func createTestEngine(t *testing.T) (*Engine, gorkflow.WorkflowStore) {
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 	engine := NewEngine(wfStore,
 		WithLogger(logger),
-		WithConfig(EngineConfig{
+		WithConfig(gorkflow.EngineConfig{
 			MaxConcurrentWorkflows: 10,
 			DefaultTimeout:         5 * time.Minute,
 		}),

@@ -59,7 +59,7 @@ func initializeApp() {
 	wfEngine = engine.NewEngine(
 		workflowStore,
 		engine.WithLogger(log.Logger),
-		engine.WithConfig(engine.EngineConfig{
+		engine.WithConfig(gorkflow.EngineConfig{
 			MaxConcurrentWorkflows: 50,
 			DefaultTimeout:         1 * time.Minute,
 		}),

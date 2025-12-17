@@ -72,7 +72,7 @@ func (e *Engine) executeStep(
 
 		if attempt > 0 {
 			// Apply backoff
-			delay := calculateBackoff(config.RetryDelayMs, attempt, string(config.RetryBackoff))
+			delay := gorkflow.CalculateBackoff(config.RetryDelayMs, attempt, string(config.RetryBackoff))
 
 			gorkflow.LogStepRetrying(e.logger, run.RunID, step.GetID(), attempt, delay)
 

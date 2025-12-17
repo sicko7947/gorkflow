@@ -220,7 +220,7 @@ func TestExecutionGraph_GetTopologicalOrder(t *testing.T) {
 	graph.AddEdge("step1", "step2")
 	graph.SetEntryPoint("step1")
 
-	order, err := graph.GetTopologicalOrder()
+	order, err := graph.TopologicalSort()
 	require.NoError(t, err)
 	assert.Equal(t, []string{"step1", "step2"}, order)
 }

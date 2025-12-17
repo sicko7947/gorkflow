@@ -15,6 +15,7 @@ type GraphNode struct {
 	StepID     string
 	Type       NodeType
 	Next       []string
+	Previous   []string
 	Conditions []Condition
 }
 
@@ -32,6 +33,7 @@ func (g *ExecutionGraph) AddNode(stepID string, nodeType NodeType) {
 			StepID:     stepID,
 			Type:       nodeType,
 			Next:       []string{},
+			Previous:   []string{},
 			Conditions: []Condition{},
 		}
 	}
@@ -65,6 +67,11 @@ func (g *ExecutionGraph) AddEdge(fromStepID, toStepID string) error {
 
 	// Add edge
 	fromNode.Next = append(fromNode.Next, toStepID)
+
+	// Add reverse edge
+	toNode := g.Nodes[toStepID]
+	toNode.Previous = append(toNode.Previous, fromStepID)
+
 	return nil
 }
 
@@ -149,11 +156,6 @@ func (g *ExecutionGraph) dfsReachable(nodeID string, reachable map[string]bool) 
 
 // TopologicalSort returns nodes in topological order
 func (g *ExecutionGraph) TopologicalSort() ([]string, error) {
-	return g.GetTopologicalOrder()
-}
-
-// GetTopologicalOrder returns nodes in topological order
-func (g *ExecutionGraph) GetTopologicalOrder() ([]string, error) {
 	// Check if graph is valid
 	if err := g.Validate(); err != nil {
 		return nil, err
@@ -202,20 +204,11 @@ func (g *ExecutionGraph) GetNextSteps(stepID string) ([]string, error) {
 
 // GetPreviousSteps returns the steps that lead to the given step
 func (g *ExecutionGraph) GetPreviousSteps(stepID string) ([]string, error) {
-	if _, exists := g.Nodes[stepID]; !exists {
+	node, exists := g.Nodes[stepID]
+	if !exists {
 		return nil, fmt.Errorf("step %s not found in graph", stepID)
 	}
-
-	var previous []string
-	for id, node := range g.Nodes {
-		for _, nextID := range node.Next {
-			if nextID == stepID {
-				previous = append(previous, id)
-				break
-			}
-		}
-	}
-	return previous, nil
+	return node.Previous, nil
 }
 
 // IsTerminal returns true if the step has no outgoing edges
@@ -236,9 +229,10 @@ func (g *ExecutionGraph) Clone() *ExecutionGraph {
 
 	for stepID, node := range g.Nodes {
 		clone.Nodes[stepID] = &GraphNode{
-			StepID: node.StepID,
-			Type:   node.Type,
-			Next:   append([]string{}, node.Next...),
+			StepID:   node.StepID,
+			Type:     node.Type,
+			Next:     append([]string{}, node.Next...),
+			Previous: append([]string{}, node.Previous...),
 			// Note: Conditions are not cloned as they're functions
 		}
 	}

@@ -44,10 +44,13 @@ func GetContext[T any](ctx *StepContext) (T, error) {
 	return val, nil
 }
 
-// StepOutputAccessor provides type-safe access to other step outputs
+// StepOutputAccessor provides type-safe access to other step outputs and inputs
 type StepOutputAccessor interface {
 	// GetOutput retrieves output from a specific step
 	GetOutput(stepID string, target interface{}) error
+
+	// GetInput retrieves input from a specific step
+	GetInput(stepID string, target interface{}) error
 
 	// HasOutput checks if a step has produced output
 	HasOutput(stepID string) bool
@@ -57,6 +60,13 @@ type StepOutputAccessor interface {
 func GetTypedOutput[T any](accessor StepOutputAccessor, stepID string) (T, error) {
 	var result T
 	err := accessor.GetOutput(stepID, &result)
+	return result, err
+}
+
+// GetTypedInput is a generic function for type-safe input retrieval
+func GetTypedInput[T any](accessor StepOutputAccessor, stepID string) (T, error) {
+	var result T
+	err := accessor.GetInput(stepID, &result)
 	return result, err
 }
 
@@ -90,30 +100,32 @@ func GetTyped[T any](accessor StateAccessor, key string) (T, error) {
 	return result, err
 }
 
-// stepOutputAccessor implements StepOutputAccessor
-type stepOutputAccessor struct {
-	runID string
-	store WorkflowStore
-	cache map[string][]byte
+// stepAccessor implements StepOutputAccessor
+type stepAccessor struct {
+	runID       string
+	store       WorkflowStore
+	outputCache map[string][]byte
+	inputCache  map[string][]byte
 }
 
-// newStepOutputAccessor creates a new output accessor
-func newStepOutputAccessor(runID string, wfStore WorkflowStore) StepOutputAccessor {
-	return &stepOutputAccessor{
-		runID: runID,
-		store: wfStore,
-		cache: make(map[string][]byte),
+// NewStepAccessor creates a new step accessor (exported)
+func NewStepAccessor(runID string, wfStore WorkflowStore) StepOutputAccessor {
+	return &stepAccessor{
+		runID:       runID,
+		store:       wfStore,
+		outputCache: make(map[string][]byte),
+		inputCache:  make(map[string][]byte),
 	}
 }
 
-// NewStepOutputAccessor creates a new output accessor (exported)
+// NewStepOutputAccessor creates a new step accessor (exported, deprecated: use NewStepAccessor)
 func NewStepOutputAccessor(runID string, wfStore WorkflowStore) StepOutputAccessor {
-	return newStepOutputAccessor(runID, wfStore)
+	return NewStepAccessor(runID, wfStore)
 }
 
-func (a *stepOutputAccessor) GetOutput(stepID string, target interface{}) error {
+func (a *stepAccessor) GetOutput(stepID string, target interface{}) error {
 	// Check cache first
-	if data, ok := a.cache[stepID]; ok {
+	if data, ok := a.outputCache[stepID]; ok {
 		return json.Unmarshal(data, target)
 	}
 
@@ -124,7 +136,7 @@ func (a *stepOutputAccessor) GetOutput(stepID string, target interface{}) error 
 	}
 
 	// Cache it
-	a.cache[stepID] = data
+	a.outputCache[stepID] = data
 
 	// Unmarshal
 	if err := json.Unmarshal(data, target); err != nil {
@@ -134,15 +146,42 @@ func (a *stepOutputAccessor) GetOutput(stepID string, target interface{}) error 
 	return nil
 }
 
-func (a *stepOutputAccessor) HasOutput(stepID string) bool {
+func (a *stepAccessor) HasOutput(stepID string) bool {
 	// Check cache
-	if _, ok := a.cache[stepID]; ok {
+	if _, ok := a.outputCache[stepID]; ok {
 		return true
 	}
 
 	// Check store
 	_, err := a.store.LoadStepOutput(context.Background(), a.runID, stepID)
 	return err == nil
+}
+
+func (a *stepAccessor) GetInput(stepID string, target interface{}) error {
+	// Check cache first
+	if data, ok := a.inputCache[stepID]; ok {
+		return json.Unmarshal(data, target)
+	}
+
+	// Load step execution to get the input
+	exec, err := a.store.GetStepExecution(context.Background(), a.runID, stepID)
+	if err != nil {
+		return fmt.Errorf("failed to load step execution for step %s: %w", stepID, err)
+	}
+
+	if exec.Input == nil {
+		return fmt.Errorf("no input found for step %s", stepID)
+	}
+
+	// Cache it
+	a.inputCache[stepID] = exec.Input
+
+	// Unmarshal
+	if err := json.Unmarshal(exec.Input, target); err != nil {
+		return fmt.Errorf("failed to unmarshal input for step %s: %w", stepID, err)
+	}
+
+	return nil
 }
 
 // stateAccessor implements StateAccessor
@@ -152,18 +191,13 @@ type stateAccessor struct {
 	cache map[string][]byte
 }
 
-// newStateAccessor creates a new state accessor
-func newStateAccessor(runID string, wfStore WorkflowStore) StateAccessor {
+// NewStateAccessor creates a new state accessor
+func NewStateAccessor(runID string, wfStore WorkflowStore) StateAccessor {
 	return &stateAccessor{
 		runID: runID,
 		store: wfStore,
 		cache: make(map[string][]byte),
 	}
-}
-
-// NewStateAccessor creates a new state accessor (exported)
-func NewStateAccessor(runID string, wfStore WorkflowStore) StateAccessor {
-	return newStateAccessor(runID, wfStore)
 }
 
 func (a *stateAccessor) Set(key string, value interface{}) error {
