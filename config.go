@@ -5,19 +5,19 @@ import "time"
 // ExecutionConfig holds step-level execution parameters
 type ExecutionConfig struct {
 	// Retry policy
-	MaxRetries   int             `json:"maxRetries"`
-	RetryDelayMs int             `json:"retryDelayMs"`
-	RetryBackoff BackoffStrategy `json:"retryBackoff"`
+	MaxRetries   int             `json:"max_retries,omitempty"`
+	RetryDelayMs int             `json:"retry_delay_ms,omitempty"`
+	RetryBackoff BackoffStrategy `json:"retry_backoff,omitempty"`
 
 	// Timeout
-	TimeoutSeconds int `json:"timeoutSeconds"`
+	TimeoutSeconds int `json:"timeout_seconds,omitempty"`
 
 	// Concurrency (for parallel execution in future)
-	MaxConcurrency int `json:"maxConcurrency"`
+	MaxConcurrency int `json:"max_concurrency,omitempty"`
 
 	// Failure behavior
-	ContinueOnError bool    `json:"continueOnError"`
-	FallbackStepID  *string `json:"fallbackStepId,omitempty"`
+	ContinueOnError bool    `json:"continue_on_error,omitempty"`
+	FallbackStepID  *string `json:"fallback_step_id,omitempty"`
 }
 
 // BackoffStrategy defines retry backoff behavior
@@ -41,8 +41,8 @@ var DefaultExecutionConfig = ExecutionConfig{
 
 // EngineConfig holds engine-level configuration
 type EngineConfig struct {
-	MaxConcurrentWorkflows int           `json:"maxConcurrentWorkflows"`
-	DefaultTimeout         time.Duration `json:"defaultTimeout"`
+	MaxConcurrentWorkflows int           `json:"max_concurrent_workflows"`
+	DefaultTimeout         time.Duration `json:"default_timeout"`
 }
 
 // DefaultEngineConfig provides engine defaults
