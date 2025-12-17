@@ -25,7 +25,7 @@ func (e *Engine) executeStep(
 	run *gorkflow.WorkflowRun,
 	step gorkflow.StepExecutor,
 	inputBytes []byte,
-	outputs gorkflow.StepOutputAccessor,
+	outputs gorkflow.StepDataAccessor,
 	state gorkflow.StateAccessor,
 	customContext any,
 	executionIndex int,
@@ -56,7 +56,7 @@ func (e *Engine) executeStep(
 		RunID:         run.RunID,
 		StepID:        step.GetID(),
 		Logger:        stepLogger,
-		Outputs:       outputs,
+		Data:          outputs,
 		State:         state,
 		CustomContext: customContext,
 	}

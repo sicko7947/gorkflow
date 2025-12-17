@@ -149,7 +149,7 @@ func (e *Engine) executeWorkflow(ctx context.Context, wf *gorkflow.Workflow, run
 	}
 
 	// Build execution context - create accessors for state and outputs
-	outputs := gorkflow.NewStepOutputAccessor(run.RunID, e.store)
+	outputs := gorkflow.NewStepAccessor(run.RunID, e.store)
 	state := gorkflow.NewStateAccessor(run.RunID, e.store)
 
 	// Get execution order from graph

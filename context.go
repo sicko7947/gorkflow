@@ -20,8 +20,8 @@ type StepContext struct {
 	// Logger (enriched with step context)
 	Logger zerolog.Logger
 
-	// Access to other step outputs (type-safe)
-	Outputs StepOutputAccessor
+	// Access to other step data (inputs and outputs)
+	Data StepDataAccessor
 
 	// Access to workflow-level state
 	State StateAccessor
@@ -44,8 +44,8 @@ func GetContext[T any](ctx *StepContext) (T, error) {
 	return val, nil
 }
 
-// StepOutputAccessor provides type-safe access to other step outputs and inputs
-type StepOutputAccessor interface {
+// StepDataAccessor provides type-safe access to other step outputs and inputs
+type StepDataAccessor interface {
 	// GetOutput retrieves output from a specific step
 	GetOutput(stepID string, target interface{}) error
 
@@ -56,17 +56,17 @@ type StepOutputAccessor interface {
 	HasOutput(stepID string) bool
 }
 
-// GetTypedOutput is a generic function for type-safe output retrieval
-func GetTypedOutput[T any](accessor StepOutputAccessor, stepID string) (T, error) {
+// GetOutput is a generic function for type-safe output retrieval from StepContext
+func GetOutput[T any](ctx *StepContext, stepID string) (T, error) {
 	var result T
-	err := accessor.GetOutput(stepID, &result)
+	err := ctx.Data.GetOutput(stepID, &result)
 	return result, err
 }
 
-// GetTypedInput is a generic function for type-safe input retrieval
-func GetTypedInput[T any](accessor StepOutputAccessor, stepID string) (T, error) {
+// GetInput is a generic function for type-safe input retrieval from StepContext
+func GetInput[T any](ctx *StepContext, stepID string) (T, error) {
 	var result T
-	err := accessor.GetInput(stepID, &result)
+	err := ctx.Data.GetInput(stepID, &result)
 	return result, err
 }
 
@@ -100,7 +100,7 @@ func GetTyped[T any](accessor StateAccessor, key string) (T, error) {
 	return result, err
 }
 
-// stepAccessor implements StepOutputAccessor
+// stepAccessor implements StepDataAccessor
 type stepAccessor struct {
 	runID       string
 	store       WorkflowStore
@@ -108,8 +108,8 @@ type stepAccessor struct {
 	inputCache  map[string][]byte
 }
 
-// NewStepAccessor creates a new step accessor (exported)
-func NewStepAccessor(runID string, wfStore WorkflowStore) StepOutputAccessor {
+// newStepAccessor creates a new step accessor
+func newStepAccessor(runID string, wfStore WorkflowStore) StepDataAccessor {
 	return &stepAccessor{
 		runID:       runID,
 		store:       wfStore,
@@ -118,9 +118,9 @@ func NewStepAccessor(runID string, wfStore WorkflowStore) StepOutputAccessor {
 	}
 }
 
-// NewStepOutputAccessor creates a new step accessor (exported, deprecated: use NewStepAccessor)
-func NewStepOutputAccessor(runID string, wfStore WorkflowStore) StepOutputAccessor {
-	return NewStepAccessor(runID, wfStore)
+// NewStepAccessor creates a new step accessor (exported)
+func NewStepAccessor(runID string, wfStore WorkflowStore) StepDataAccessor {
+	return newStepAccessor(runID, wfStore)
 }
 
 func (a *stepAccessor) GetOutput(stepID string, target interface{}) error {

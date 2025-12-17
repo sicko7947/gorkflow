@@ -93,8 +93,8 @@ func NewFormatResultStep() *workflow.Step[EmailSentOutput, WorkflowResult] {
 		"Format Final Result",
 		func(ctx *workflow.StepContext, input EmailSentOutput) (WorkflowResult, error) {
 			// Get user data from previous step
-			var userData ValidatedUserOutput
-			if err := ctx.Outputs.GetOutput("validate_user", &userData); err != nil {
+			userData, err := workflow.GetOutput[ValidatedUserOutput](ctx, "validate_user")
+			if err != nil {
 				return WorkflowResult{}, fmt.Errorf("failed to get user data: %w", err)
 			}
 

@@ -24,9 +24,9 @@ func NewConditionalWorkflow() (*gorkflow.Workflow, error) {
 	// Condition: Only format if the value from the previous step is > 10
 	// This demonstrates checking the output of a previous step in the condition
 	shouldFormat := func(ctx *gorkflow.StepContext) (bool, error) {
-		var doubleOut DoubleOutput
 		// "double" is the ID of the NewDoubleStep()
-		if err := ctx.Outputs.GetOutput("double", &doubleOut); err != nil {
+		doubleOut, err := gorkflow.GetOutput[DoubleOutput](ctx, "double")
+		if err != nil {
 			ctx.Logger.Warn().Err(err).Msg("Failed to get output from 'double' step")
 			return false, nil
 		}

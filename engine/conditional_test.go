@@ -156,8 +156,7 @@ func TestEngine_ConditionalStep_BasedOnPreviousOutput(t *testing.T) {
 	)
 
 	condition := func(ctx *gorkflow.StepContext) (bool, error) {
-		var discoverOutput DiscoverOutput
-		err := ctx.Outputs.GetOutput("discover", &discoverOutput)
+		discoverOutput, err := gorkflow.GetOutput[DiscoverOutput](ctx, "discover")
 		if err != nil {
 			return false, err
 		}

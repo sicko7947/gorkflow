@@ -59,7 +59,7 @@ func discoverCompanies(ctx *gorkflow.StepContext, input DiscoverInput) (Discover
 
 func enrichCompanies(ctx *gorkflow.StepContext, input EnrichInput) (EnrichOutput, error) {
 	// Access previous step output
-	discoverResult, err := gorkflow.GetTypedOutput[DiscoverOutput](ctx.Outputs, "discover")
+	discoverResult, err := gorkflow.GetOutput[DiscoverOutput](ctx, "discover")
 	if err != nil {
 		return EnrichOutput{}, err
 	}
@@ -81,7 +81,7 @@ func enrichCompanies(ctx *gorkflow.StepContext, input EnrichInput) (EnrichOutput
 }
 
 func filterCompanies(ctx *gorkflow.StepContext, input FilterInput) (FilterOutput, error) {
-	enrichResult, err := gorkflow.GetTypedOutput[EnrichOutput](ctx.Outputs, "enrich")
+	enrichResult, err := gorkflow.GetOutput[EnrichOutput](ctx, "enrich")
 	if err != nil {
 		return FilterOutput{}, err
 	}
