@@ -41,6 +41,7 @@ func (e *Engine) executeStep(
 		Input:          inputBytes,
 		StartedAt:      nil,
 		CompletedAt:    nil,
+		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 	}
 
