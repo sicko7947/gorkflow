@@ -63,8 +63,11 @@ func NewLibSQLStoreWithOptions(url string, opts LibSQLStoreOptions) (*LibSQLStor
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
+	// Detect if this is a remote Turso database (libsql:// or https://)
+	isRemote := strings.HasPrefix(url, "libsql://") || strings.HasPrefix(url, "https://")
+
 	store := &LibSQLStore{db: db}
-	if err := store.init(ctx, opts); err != nil {
+	if err := store.init(ctx, opts, isRemote); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -73,19 +76,33 @@ func NewLibSQLStoreWithOptions(url string, opts LibSQLStoreOptions) (*LibSQLStor
 }
 
 // init creates the necessary tables and sets performance PRAGMAs
-func (s *LibSQLStore) init(ctx context.Context, opts LibSQLStoreOptions) error {
-	// Execute performance PRAGMAs
-	pragmas := []string{
+func (s *LibSQLStore) init(ctx context.Context, opts LibSQLStoreOptions, isRemote bool) error {
+	// PRAGMAs that work on both local and remote
+	universalPragmas := []string{
+		"PRAGMA foreign_keys = ON",
+	}
+
+	// PRAGMAs only for local SQLite (not supported on remote Turso)
+	localOnlyPragmas := []string{
 		"PRAGMA journal_mode = WAL",
 		"PRAGMA synchronous = NORMAL",
 		"PRAGMA busy_timeout = 5000",
-		"PRAGMA foreign_keys = ON",
 		fmt.Sprintf("PRAGMA cache_size = %d", opts.CacheSize),
 	}
 
-	for _, pragma := range pragmas {
+	// Apply universal PRAGMAs (fail if these don't work)
+	for _, pragma := range universalPragmas {
 		if _, err := s.db.ExecContext(ctx, pragma); err != nil {
 			return fmt.Errorf("failed to set pragma %q: %w", pragma, err)
+		}
+	}
+
+	// Apply local-only PRAGMAs (skip for remote, these are managed by Turso)
+	if !isRemote {
+		for _, pragma := range localOnlyPragmas {
+			if _, err := s.db.ExecContext(ctx, pragma); err != nil {
+				return fmt.Errorf("failed to set pragma %q: %w", pragma, err)
+			}
 		}
 	}
 
@@ -97,8 +114,9 @@ func (s *LibSQLStore) init(ctx context.Context, opts LibSQLStoreOptions) error {
 }
 
 // Init is kept for backward compatibility but delegates to init
+// Assumes local database (sets PRAGMAs)
 func (s *LibSQLStore) Init(ctx context.Context) error {
-	return s.init(ctx, DefaultLibSQLStoreOptions())
+	return s.init(ctx, DefaultLibSQLStoreOptions(), false)
 }
 
 // Close closes the database connection
