@@ -114,17 +114,3 @@ type WorkflowState struct {
 	Data      map[string][]byte `json:"data"` // Key-value store (values are JSON)
 	UpdatedAt time.Time         `json:"updatedAt"`
 }
-
-// NodeType defines the type of graph node
-type NodeType string
-
-const (
-	NodeTypeSequential  NodeType = "SEQUENTIAL"
-	NodeTypeParallel    NodeType = "PARALLEL"
-	NodeTypeConditional NodeType = "CONDITIONAL"
-)
-
-// String returns the string representation
-func (n NodeType) String() string {
-	return string(n)
-}

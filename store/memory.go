@@ -28,6 +28,70 @@ func NewMemoryStore() gorkflow.WorkflowStore {
 	}
 }
 
+// deepCopyRun creates a deep copy of a WorkflowRun
+func deepCopyRun(run *gorkflow.WorkflowRun) *gorkflow.WorkflowRun {
+	if run == nil {
+		return nil
+	}
+	runCopy := *run
+
+	// Deep copy Tags map
+	if run.Tags != nil {
+		runCopy.Tags = make(map[string]string, len(run.Tags))
+		for k, v := range run.Tags {
+			runCopy.Tags[k] = v
+		}
+	}
+
+	// Deep copy Input/Output/Context (json.RawMessage is []byte)
+	if run.Input != nil {
+		runCopy.Input = make([]byte, len(run.Input))
+		copy(runCopy.Input, run.Input)
+	}
+	if run.Output != nil {
+		runCopy.Output = make([]byte, len(run.Output))
+		copy(runCopy.Output, run.Output)
+	}
+	if run.Context != nil {
+		runCopy.Context = make([]byte, len(run.Context))
+		copy(runCopy.Context, run.Context)
+	}
+
+	// Deep copy Error
+	if run.Error != nil {
+		errCopy := *run.Error
+		if run.Error.Details != nil {
+			errCopy.Details = make(map[string]any, len(run.Error.Details))
+			for k, v := range run.Error.Details {
+				errCopy.Details[k] = v
+			}
+		}
+		runCopy.Error = &errCopy
+	}
+
+	// Deep copy time pointers
+	if run.StartedAt != nil {
+		t := *run.StartedAt
+		runCopy.StartedAt = &t
+	}
+	if run.CompletedAt != nil {
+		t := *run.CompletedAt
+		runCopy.CompletedAt = &t
+	}
+
+	return &runCopy
+}
+
+// deepCopyStepExecution creates a deep copy of a StepExecution
+func deepCopyStepExecution(exec *gorkflow.StepExecution) *gorkflow.StepExecution {
+	if exec == nil {
+		return nil
+	}
+	execCopy := *exec
+	// Note: exec.Error is an error interface, shallow copy is acceptable
+	return &execCopy
+}
+
 // Workflow run operations
 
 func (s *MemoryStore) CreateRun(ctx context.Context, run *gorkflow.WorkflowRun) error {
@@ -38,9 +102,7 @@ func (s *MemoryStore) CreateRun(ctx context.Context, run *gorkflow.WorkflowRun) 
 		return fmt.Errorf("workflow run %s already exists", run.RunID)
 	}
 
-	// Deep copy
-	runCopy := *run
-	s.runs[run.RunID] = &runCopy
+	s.runs[run.RunID] = deepCopyRun(run)
 
 	// Initialize maps for this run
 	s.stepExecutions[run.RunID] = make(map[string]*gorkflow.StepExecution)
@@ -56,12 +118,10 @@ func (s *MemoryStore) GetRun(ctx context.Context, runID string) (*gorkflow.Workf
 
 	run, exists := s.runs[runID]
 	if !exists {
-		return nil, fmt.Errorf("workflow run %s not found", runID)
+		return nil, gorkflow.ErrRunNotFound
 	}
 
-	// Deep copy
-	runCopy := *run
-	return &runCopy, nil
+	return deepCopyRun(run), nil
 }
 
 func (s *MemoryStore) UpdateRun(ctx context.Context, run *gorkflow.WorkflowRun) error {
@@ -69,13 +129,10 @@ func (s *MemoryStore) UpdateRun(ctx context.Context, run *gorkflow.WorkflowRun) 
 	defer s.mu.Unlock()
 
 	if _, exists := s.runs[run.RunID]; !exists {
-		return fmt.Errorf("workflow run %s not found", run.RunID)
+		return gorkflow.ErrRunNotFound
 	}
 
-	// Deep copy
-	runCopy := *run
-	s.runs[run.RunID] = &runCopy
-
+	s.runs[run.RunID] = deepCopyRun(run)
 	return nil
 }
 
@@ -85,11 +142,22 @@ func (s *MemoryStore) UpdateRunStatus(ctx context.Context, runID string, status 
 
 	run, exists := s.runs[runID]
 	if !exists {
-		return fmt.Errorf("workflow run %s not found", runID)
+		return gorkflow.ErrRunNotFound
 	}
 
 	run.Status = status
-	run.Error = err
+	if err != nil {
+		errCopy := *err
+		if err.Details != nil {
+			errCopy.Details = make(map[string]any, len(err.Details))
+			for k, v := range err.Details {
+				errCopy.Details[k] = v
+			}
+		}
+		run.Error = &errCopy
+	} else {
+		run.Error = nil
+	}
 
 	return nil
 }
@@ -112,14 +180,17 @@ func (s *MemoryStore) ListRuns(ctx context.Context, filter gorkflow.RunFilter) (
 			continue
 		}
 
-		// Deep copy
-		runCopy := *run
-		runs = append(runs, &runCopy)
+		runs = append(runs, deepCopyRun(run))
+	}
 
-		// Apply limit
-		if filter.Limit > 0 && len(runs) >= filter.Limit {
-			break
-		}
+	// Sort by created_at DESC to match LibSQL behavior
+	sort.Slice(runs, func(i, j int) bool {
+		return runs[i].CreatedAt.After(runs[j].CreatedAt)
+	})
+
+	// Apply limit after sorting
+	if filter.Limit > 0 && len(runs) > filter.Limit {
+		runs = runs[:filter.Limit]
 	}
 
 	return runs, nil
@@ -135,10 +206,7 @@ func (s *MemoryStore) CreateStepExecution(ctx context.Context, exec *gorkflow.St
 		s.stepExecutions[exec.RunID] = make(map[string]*gorkflow.StepExecution)
 	}
 
-	// Deep copy
-	execCopy := *exec
-	s.stepExecutions[exec.RunID][exec.StepID] = &execCopy
-
+	s.stepExecutions[exec.RunID][exec.StepID] = deepCopyStepExecution(exec)
 	return nil
 }
 
@@ -148,17 +216,15 @@ func (s *MemoryStore) GetStepExecution(ctx context.Context, runID, stepID string
 
 	runExecs, exists := s.stepExecutions[runID]
 	if !exists {
-		return nil, fmt.Errorf("no step executions for run %s", runID)
+		return nil, gorkflow.ErrStepExecutionNotFound
 	}
 
 	exec, exists := runExecs[stepID]
 	if !exists {
-		return nil, fmt.Errorf("step execution %s/%s not found", runID, stepID)
+		return nil, gorkflow.ErrStepExecutionNotFound
 	}
 
-	// Deep copy
-	execCopy := *exec
-	return &execCopy, nil
+	return deepCopyStepExecution(exec), nil
 }
 
 func (s *MemoryStore) UpdateStepExecution(ctx context.Context, exec *gorkflow.StepExecution) error {
@@ -166,13 +232,10 @@ func (s *MemoryStore) UpdateStepExecution(ctx context.Context, exec *gorkflow.St
 	defer s.mu.Unlock()
 
 	if _, exists := s.stepExecutions[exec.RunID]; !exists {
-		return fmt.Errorf("no step executions for run %s", exec.RunID)
+		return gorkflow.ErrStepExecutionNotFound
 	}
 
-	// Deep copy
-	execCopy := *exec
-	s.stepExecutions[exec.RunID][exec.StepID] = &execCopy
-
+	s.stepExecutions[exec.RunID][exec.StepID] = deepCopyStepExecution(exec)
 	return nil
 }
 
@@ -187,9 +250,7 @@ func (s *MemoryStore) ListStepExecutions(ctx context.Context, runID string) ([]*
 
 	executions := make([]*gorkflow.StepExecution, 0, len(runExecs))
 	for _, exec := range runExecs {
-		// Deep copy
-		execCopy := *exec
-		executions = append(executions, &execCopy)
+		executions = append(executions, deepCopyStepExecution(exec))
 	}
 
 	// Sort by execution index
@@ -224,12 +285,12 @@ func (s *MemoryStore) LoadStepOutput(ctx context.Context, runID, stepID string) 
 
 	runOutputs, exists := s.stepOutputs[runID]
 	if !exists {
-		return nil, fmt.Errorf("no step outputs for run %s", runID)
+		return nil, gorkflow.ErrStepOutputNotFound
 	}
 
 	output, exists := runOutputs[stepID]
 	if !exists {
-		return nil, fmt.Errorf("step output %s/%s not found", runID, stepID)
+		return nil, gorkflow.ErrStepOutputNotFound
 	}
 
 	// Copy bytes
@@ -262,12 +323,12 @@ func (s *MemoryStore) LoadState(ctx context.Context, runID, key string) ([]byte,
 
 	runState, exists := s.state[runID]
 	if !exists {
-		return nil, fmt.Errorf("no state for run %s", runID)
+		return nil, gorkflow.ErrStateNotFound
 	}
 
 	value, exists := runState[key]
 	if !exists {
-		return nil, fmt.Errorf("state key %s not found", key)
+		return nil, gorkflow.ErrStateNotFound
 	}
 
 	// Copy bytes
@@ -282,7 +343,7 @@ func (s *MemoryStore) DeleteState(ctx context.Context, runID, key string) error 
 
 	runState, exists := s.state[runID]
 	if !exists {
-		return fmt.Errorf("no state for run %s", runID)
+		return nil // No error if run doesn't exist
 	}
 
 	delete(runState, key)
@@ -299,7 +360,7 @@ func (s *MemoryStore) GetAllState(ctx context.Context, runID string) (map[string
 	}
 
 	// Deep copy
-	stateCopy := make(map[string][]byte)
+	stateCopy := make(map[string][]byte, len(runState))
 	for k, v := range runState {
 		valueCopy := make([]byte, len(v))
 		copy(valueCopy, v)

@@ -22,7 +22,6 @@ func TestEngine_ConditionalStep_ExecutesWhenTrue(t *testing.T) {
 		},
 	)
 
-	// Condition that always returns true
 	condition := func(ctx *gorkflow.StepContext) (bool, error) {
 		return true, nil
 	}
@@ -54,7 +53,6 @@ func TestEngine_ConditionalStep_SkipsWhenFalse(t *testing.T) {
 		},
 	)
 
-	// Condition that always returns false
 	condition := func(ctx *gorkflow.StepContext) (bool, error) {
 		return false, nil
 	}
@@ -74,7 +72,6 @@ func TestEngine_ConditionalStep_SkipsWhenFalse(t *testing.T) {
 
 	assert.Equal(t, gorkflow.RunStatusCompleted, run.Status)
 
-	// Verify default output was used
 	outputBytes, err := wfStore.LoadStepOutput(context.Background(), runID, "conditional")
 	require.NoError(t, err)
 
@@ -87,7 +84,6 @@ func TestEngine_ConditionalStep_SkipsWhenFalse(t *testing.T) {
 func TestEngine_ConditionalStep_BasedOnState(t *testing.T) {
 	engine, _ := createTestEngine(t)
 
-	// First step sets state
 	setupStep := gorkflow.NewStep("setup", "Setup Step",
 		func(ctx *gorkflow.StepContext, input DiscoverInput) (DiscoverOutput, error) {
 			ctx.State.Set("should_process", input.Limit > 5)
@@ -95,10 +91,9 @@ func TestEngine_ConditionalStep_BasedOnState(t *testing.T) {
 		},
 	)
 
-	// Conditional step checks state
 	baseStep := gorkflow.NewStep("process", "Process Step",
 		func(ctx *gorkflow.StepContext, input EnrichInput) (EnrichOutput, error) {
-			return EnrichOutput{Enriched: map[string]interface{}{"processed": true}}, nil
+			return EnrichOutput{Enriched: map[string]any{"processed": true}}, nil
 		},
 	)
 
@@ -137,7 +132,6 @@ func TestEngine_ConditionalStep_BasedOnState(t *testing.T) {
 func TestEngine_ConditionalStep_BasedOnPreviousOutput(t *testing.T) {
 	engine, _ := createTestEngine(t)
 
-	// First step returns data
 	discoverStep := gorkflow.NewStep("discover", "Discover",
 		func(ctx *gorkflow.StepContext, input DiscoverInput) (DiscoverOutput, error) {
 			companies := []string{}
@@ -148,10 +142,9 @@ func TestEngine_ConditionalStep_BasedOnPreviousOutput(t *testing.T) {
 		},
 	)
 
-	// Conditional enrichment only if companies were found
 	enrichStep := gorkflow.NewStep("enrich", "Enrich",
 		func(ctx *gorkflow.StepContext, input EnrichInput) (EnrichOutput, error) {
-			return EnrichOutput{Enriched: map[string]interface{}{"enriched": true}}, nil
+			return EnrichOutput{Enriched: map[string]any{"enriched": true}}, nil
 		},
 	)
 
@@ -193,7 +186,6 @@ func TestEngine_ConditionalStep_ConditionError(t *testing.T) {
 		},
 	)
 
-	// Condition that returns error
 	condition := func(ctx *gorkflow.StepContext) (bool, error) {
 		return false, errors.New("condition evaluation failed")
 	}
@@ -210,7 +202,6 @@ func TestEngine_ConditionalStep_ConditionError(t *testing.T) {
 
 	run := waitForCompletion(t, engine, runID, 10*time.Second)
 
-	// Should fail due to condition error
 	assert.Equal(t, gorkflow.RunStatusFailed, run.Status)
 }
 
@@ -224,10 +215,9 @@ func TestEngine_MultipleConditionalSteps(t *testing.T) {
 		},
 	)
 
-	// Conditional: execute if value > 5
 	cond2Step := gorkflow.NewStep("step2", "Step 2",
 		func(ctx *gorkflow.StepContext, input EnrichInput) (EnrichOutput, error) {
-			return EnrichOutput{Enriched: map[string]interface{}{"step2": true}}, nil
+			return EnrichOutput{Enriched: map[string]any{"step2": true}}, nil
 		},
 	)
 	cond2 := func(ctx *gorkflow.StepContext) (bool, error) {
@@ -237,7 +227,6 @@ func TestEngine_MultipleConditionalSteps(t *testing.T) {
 	}
 	condStep2 := gorkflow.NewConditionalStep(cond2Step, cond2, nil)
 
-	// Conditional: execute if value <= 5
 	cond3Step := gorkflow.NewStep("step3", "Step 3",
 		func(ctx *gorkflow.StepContext, input FilterInput) (FilterOutput, error) {
 			return FilterOutput{Filtered: []string{"Step3"}}, nil

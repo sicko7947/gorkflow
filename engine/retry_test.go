@@ -17,7 +17,6 @@ func TestEngine_RetrySuccess(t *testing.T) {
 
 	attemptCount := int32(0)
 
-	// Step that fails twice, then succeeds
 	retryStep := gorkflow.NewStep("retry", "Retry Step",
 		func(ctx *gorkflow.StepContext, input DiscoverInput) (DiscoverOutput, error) {
 			count := atomic.AddInt32(&attemptCount, 1)
@@ -40,14 +39,12 @@ func TestEngine_RetrySuccess(t *testing.T) {
 
 	run := waitForCompletion(t, engine, runID, 10*time.Second)
 
-	// Should eventually succeed
 	assert.Equal(t, gorkflow.RunStatusCompleted, run.Status)
 	assert.Equal(t, int32(3), atomic.LoadInt32(&attemptCount))
 
-	// Check step execution
 	steps, _ := engine.GetStepExecutions(context.Background(), runID)
 	assert.Equal(t, gorkflow.StepStatusCompleted, steps[0].Status)
-	assert.Equal(t, 2, steps[0].Attempt) // 0-indexed, so attempt 2 = 3rd try
+	assert.Equal(t, 2, steps[0].Attempt)
 }
 
 func TestEngine_RetryExhaustion(t *testing.T) {
@@ -55,7 +52,6 @@ func TestEngine_RetryExhaustion(t *testing.T) {
 
 	attemptCount := int32(0)
 
-	// Step that always fails
 	alwaysFailStep := gorkflow.NewStep("fail", "Always Fail",
 		func(ctx *gorkflow.StepContext, input DiscoverInput) (DiscoverOutput, error) {
 			atomic.AddInt32(&attemptCount, 1)
@@ -75,11 +71,9 @@ func TestEngine_RetryExhaustion(t *testing.T) {
 
 	run := waitForCompletion(t, engine, runID, 10*time.Second)
 
-	// Should fail after all retries
 	assert.Equal(t, gorkflow.RunStatusFailed, run.Status)
-	assert.Equal(t, int32(4), atomic.LoadInt32(&attemptCount)) // Initial attempt + 3 retries
+	assert.Equal(t, int32(4), atomic.LoadInt32(&attemptCount))
 
-	// Check step execution
 	steps, _ := engine.GetStepExecutions(context.Background(), runID)
 	assert.Equal(t, gorkflow.StepStatusFailed, steps[0].Status)
 	assert.NotNil(t, steps[0].Error)
@@ -115,15 +109,12 @@ func TestEngine_LinearBackoff(t *testing.T) {
 
 	waitForCompletion(t, engine, runID, 15*time.Second)
 
-	// Verify linear backoff delays
 	require.Len(t, attemptTimes, 4)
 
-	// Delays should increase linearly: 200ms, 400ms, 600ms
 	delay1 := attemptTimes[1].Sub(attemptTimes[0])
 	delay2 := attemptTimes[2].Sub(attemptTimes[1])
 	delay3 := attemptTimes[3].Sub(attemptTimes[2])
 
-	// Allow 50ms tolerance
 	tolerance := 50 * time.Millisecond
 	assert.InDelta(t, 200*time.Millisecond, delay1, float64(tolerance))
 	assert.InDelta(t, 400*time.Millisecond, delay2, float64(tolerance))
@@ -160,10 +151,8 @@ func TestEngine_ExponentialBackoff(t *testing.T) {
 
 	waitForCompletion(t, engine, runID, 15*time.Second)
 
-	// Verify exponential backoff
 	require.Len(t, attemptTimes, 4)
 
-	// Delays should increase exponentially: 100ms, 200ms, 400ms
 	delay1 := attemptTimes[1].Sub(attemptTimes[0])
 	delay2 := attemptTimes[2].Sub(attemptTimes[1])
 	delay3 := attemptTimes[3].Sub(attemptTimes[2])
@@ -204,13 +193,11 @@ func TestEngine_NoBackoff(t *testing.T) {
 
 	waitForCompletion(t, engine, runID, 10*time.Second)
 
-	// With no backoff, all retries should happen immediately
 	require.Len(t, attemptTimes, 3)
 
 	delay1 := attemptTimes[1].Sub(attemptTimes[0])
 	delay2 := attemptTimes[2].Sub(attemptTimes[1])
 
-	// Should be minimal delay (just processing time)
 	assert.Less(t, delay1, 50*time.Millisecond)
 	assert.Less(t, delay2, 50*time.Millisecond)
 }
@@ -218,10 +205,8 @@ func TestEngine_NoBackoff(t *testing.T) {
 func TestEngine_Timeout(t *testing.T) {
 	engine, _ := createTestEngine(t)
 
-	// Step that takes too long
 	slowStep := gorkflow.NewStep("slow", "Slow Step",
 		func(ctx *gorkflow.StepContext, input DiscoverInput) (DiscoverOutput, error) {
-			// Try to run for 5 seconds but will be interrupted by timeout
 			select {
 			case <-time.After(5 * time.Second):
 				return DiscoverOutput{Companies: []string{"Done"}, Count: 1}, nil
@@ -230,7 +215,7 @@ func TestEngine_Timeout(t *testing.T) {
 			}
 		},
 		gorkflow.WithTimeout(500*time.Millisecond),
-		gorkflow.WithRetries(0), // No retries to make test faster
+		gorkflow.WithRetries(0),
 	)
 
 	wf, err := gorkflow.NewWorkflow("timeout_test", "Timeout Test").
@@ -243,7 +228,6 @@ func TestEngine_Timeout(t *testing.T) {
 
 	run := waitForCompletion(t, engine, runID, 10*time.Second)
 
-	// Should fail due to timeout
 	assert.Equal(t, gorkflow.RunStatusFailed, run.Status)
 
 	steps, _ := engine.GetStepExecutions(context.Background(), runID)
@@ -255,12 +239,10 @@ func TestEngine_TimeoutWithRetry(t *testing.T) {
 
 	attemptCount := int32(0)
 
-	// Step that times out twice, then succeeds quickly
 	timeoutRetryStep := gorkflow.NewStep("timeout_retry", "Timeout Retry",
 		func(ctx *gorkflow.StepContext, input DiscoverInput) (DiscoverOutput, error) {
 			count := atomic.AddInt32(&attemptCount, 1)
 			if count < 3 {
-				// First two attempts timeout
 				select {
 				case <-time.After(2 * time.Second):
 					return DiscoverOutput{}, nil
@@ -268,7 +250,6 @@ func TestEngine_TimeoutWithRetry(t *testing.T) {
 					return DiscoverOutput{}, ctx.Err()
 				}
 			}
-			// Third attempt succeeds quickly
 			return DiscoverOutput{Companies: []string{"Success"}, Count: 1}, nil
 		},
 		gorkflow.WithTimeout(500*time.Millisecond),
@@ -286,7 +267,6 @@ func TestEngine_TimeoutWithRetry(t *testing.T) {
 
 	run := waitForCompletion(t, engine, runID, 15*time.Second)
 
-	// Should eventually succeed after retries
 	assert.Equal(t, gorkflow.RunStatusCompleted, run.Status)
 	assert.Equal(t, int32(3), atomic.LoadInt32(&attemptCount))
 }
@@ -304,7 +284,7 @@ func TestEngine_ContinueOnError(t *testing.T) {
 
 	successStep := gorkflow.NewStep("success", "Success Step",
 		func(ctx *gorkflow.StepContext, input EnrichInput) (EnrichOutput, error) {
-			return EnrichOutput{Enriched: map[string]interface{}{"result": "success"}}, nil
+			return EnrichOutput{Enriched: map[string]any{"result": "success"}}, nil
 		},
 	)
 
@@ -319,7 +299,6 @@ func TestEngine_ContinueOnError(t *testing.T) {
 
 	run := waitForCompletion(t, engine, runID, 10*time.Second)
 
-	// Workflow should complete despite first step failing
 	assert.Equal(t, gorkflow.RunStatusCompleted, run.Status)
 
 	steps, _ := engine.GetStepExecutions(context.Background(), runID)

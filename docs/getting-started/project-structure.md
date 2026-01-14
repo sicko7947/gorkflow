@@ -2,7 +2,34 @@
 
 Learn how to organize your Gorkflow projects for maintainability and scalability.
 
-## Recommended Structure
+## Gorkflow Package Structure
+
+The Gorkflow library itself is organized as follows:
+
+```
+gorkflow/
+├── config.go           # Step/engine configuration, backoff strategies
+├── context.go          # StepContext, state/data accessors
+├── errors.go           # Error types and sentinel errors
+├── graph.go            # ExecutionGraph, NodeType, DAG operations
+├── helpers.go          # Utility functions (ToPtr, GetRunContext)
+├── logging.go          # Structured logging helpers
+├── models.go           # Core models (WorkflowRun, StepExecution, statuses)
+├── step.go             # Step, ConditionalStep, StepExecutor interface
+├── store_interface.go  # WorkflowStore interface
+├── validation.go       # Input/output validation with go-playground/validator
+├── workflow.go         # Workflow struct, WorkflowOption, StartOption
+├── workflow_builder.go # Fluent WorkflowBuilder API
+├── engine/             # Workflow execution engine
+│   ├── engine.go       # Engine orchestration, workflow lifecycle
+│   └── executor.go     # Step execution with retry/timeout logic
+├── store/              # Storage implementations
+│   ├── memory.go       # In-memory store for testing
+│   └── libsql.go       # LibSQL/SQLite persistence
+└── example/            # Example workflows
+```
+
+## Recommended Application Structure
 
 Here's a recommended project structure for Gorkflow applications:
 

@@ -10,6 +10,12 @@ import (
 var (
 	// ErrStepSkipped indicates that a step was skipped due to a condition
 	ErrStepSkipped = errors.New("step skipped")
+
+	// Store sentinel errors
+	ErrRunNotFound           = errors.New("workflow run not found")
+	ErrStepExecutionNotFound = errors.New("step execution not found")
+	ErrStepOutputNotFound    = errors.New("step output not found")
+	ErrStateNotFound         = errors.New("state not found")
 )
 
 // Error codes

@@ -157,3 +157,42 @@ func (w *Workflow) Validate() error {
 
 	return nil
 }
+
+// StartOption allows functional configuration of workflow execution
+type StartOption func(*StartOptions)
+
+// StartOptions holds options for starting a workflow
+type StartOptions struct {
+	ResourceID       string
+	CheckConcurrency bool
+	Tags             map[string]string
+	Synchronous      bool
+}
+
+// WithResourceID sets the resource ID for concurrency control
+func WithResourceID(id string) StartOption {
+	return func(opts *StartOptions) {
+		opts.ResourceID = id
+	}
+}
+
+// WithConcurrencyCheck enables concurrency checking
+func WithConcurrencyCheck(check bool) StartOption {
+	return func(opts *StartOptions) {
+		opts.CheckConcurrency = check
+	}
+}
+
+// WithTags sets custom tags for the workflow run
+func WithTags(tags map[string]string) StartOption {
+	return func(opts *StartOptions) {
+		opts.Tags = tags
+	}
+}
+
+// WithSynchronousExecution enables synchronous execution
+func WithSynchronousExecution() StartOption {
+	return func(opts *StartOptions) {
+		opts.Synchronous = true
+	}
+}

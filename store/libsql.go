@@ -14,21 +14,57 @@ import (
 	workflow "github.com/sicko7947/gorkflow"
 )
 
+// LibSQLStoreOptions configures the LibSQL store
+type LibSQLStoreOptions struct {
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
+	CacheSize       int // in KB, negative values mean number of pages
+}
+
+// DefaultLibSQLStoreOptions returns sensible defaults
+func DefaultLibSQLStoreOptions() LibSQLStoreOptions {
+	return LibSQLStoreOptions{
+		MaxOpenConns:    10,
+		MaxIdleConns:    5,
+		ConnMaxLifetime: time.Hour,
+		CacheSize:       -2000, // 2000 pages (~8MB with 4KB pages)
+	}
+}
+
 // LibSQLStore implements WorkflowStore for LibSQL/SQLite
 type LibSQLStore struct {
 	db *sql.DB
 }
 
-// NewLibSQLStore creates a new LibSQL store
+// NewLibSQLStore creates a new LibSQL store with default options
 // url can be a local file path (file:./local.db) or a remote Turso URL (libsql://...)
 func NewLibSQLStore(url string) (*LibSQLStore, error) {
+	return NewLibSQLStoreWithOptions(url, DefaultLibSQLStoreOptions())
+}
+
+// NewLibSQLStoreWithOptions creates a new LibSQL store with custom options
+func NewLibSQLStoreWithOptions(url string, opts LibSQLStoreOptions) (*LibSQLStore, error) {
 	db, err := sql.Open("libsql", url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
+	// Configure connection pool
+	db.SetMaxOpenConns(opts.MaxOpenConns)
+	db.SetMaxIdleConns(opts.MaxIdleConns)
+	db.SetConnMaxLifetime(opts.ConnMaxLifetime)
+
+	// Verify connectivity
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := db.PingContext(ctx); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+
 	store := &LibSQLStore{db: db}
-	if err := store.Init(context.Background()); err != nil {
+	if err := store.init(ctx, opts); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -36,13 +72,33 @@ func NewLibSQLStore(url string) (*LibSQLStore, error) {
 	return store, nil
 }
 
-// Init creates the necessary tables
-func (s *LibSQLStore) Init(ctx context.Context) error {
+// init creates the necessary tables and sets performance PRAGMAs
+func (s *LibSQLStore) init(ctx context.Context, opts LibSQLStoreOptions) error {
+	// Execute performance PRAGMAs
+	pragmas := []string{
+		"PRAGMA journal_mode = WAL",
+		"PRAGMA synchronous = NORMAL",
+		"PRAGMA busy_timeout = 5000",
+		"PRAGMA foreign_keys = ON",
+		fmt.Sprintf("PRAGMA cache_size = %d", opts.CacheSize),
+	}
+
+	for _, pragma := range pragmas {
+		if _, err := s.db.ExecContext(ctx, pragma); err != nil {
+			return fmt.Errorf("failed to set pragma %q: %w", pragma, err)
+		}
+	}
+
 	_, err := s.db.ExecContext(ctx, GetLibSQLSchema())
 	if err != nil {
 		return fmt.Errorf("failed to init schema: %w", err)
 	}
 	return nil
+}
+
+// Init is kept for backward compatibility but delegates to init
+func (s *LibSQLStore) Init(ctx context.Context) error {
+	return s.init(ctx, DefaultLibSQLStoreOptions())
 }
 
 // Close closes the database connection
@@ -82,7 +138,7 @@ func (s *LibSQLStore) GetRun(ctx context.Context, runID string) (*workflow.Workf
 	var data []byte
 	err := s.db.QueryRowContext(ctx, query, runID).Scan(&data)
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("run not found: %s", runID)
+		return nil, workflow.ErrRunNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get run: %w", err)
@@ -119,24 +175,58 @@ func (s *LibSQLStore) UpdateRun(ctx context.Context, run *workflow.WorkflowRun) 
 }
 
 func (s *LibSQLStore) UpdateRunStatus(ctx context.Context, runID string, status workflow.RunStatus, werr *workflow.WorkflowError) error {
-	// First get the current run to update its data
-	run, err := s.GetRun(ctx, runID)
-	if err != nil {
-		return err
-	}
+	now := time.Now()
 
-	run.Status = status
-	run.UpdatedAt = time.Now()
 	if werr != nil {
-		run.Error = werr
+		werrJSON, err := json.Marshal(werr)
+		if err != nil {
+			return fmt.Errorf("failed to marshal error: %w", err)
+		}
+
+		query := `
+			UPDATE workflow_runs 
+			SET status = ?, 
+			    updated_at = ?, 
+			    data = json_set(data, '$.status', ?, '$.updatedAt', ?, '$.error', json(?))
+			WHERE run_id = ?
+		`
+		_, err = s.db.ExecContext(ctx, query,
+			string(status),
+			now,
+			string(status),
+			now.Format(time.RFC3339Nano),
+			string(werrJSON),
+			runID,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to update run status with error: %w", err)
+		}
+	} else {
+		query := `
+			UPDATE workflow_runs 
+			SET status = ?, 
+			    updated_at = ?, 
+			    data = json_set(data, '$.status', ?, '$.updatedAt', ?)
+			WHERE run_id = ?
+		`
+		_, err := s.db.ExecContext(ctx, query,
+			string(status),
+			now,
+			string(status),
+			now.Format(time.RFC3339Nano),
+			runID,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to update run status: %w", err)
+		}
 	}
 
-	return s.UpdateRun(ctx, run)
+	return nil
 }
 
 func (s *LibSQLStore) ListRuns(ctx context.Context, filter workflow.RunFilter) ([]*workflow.WorkflowRun, error) {
 	var queryBuilder strings.Builder
-	var args []interface{}
+	var args []any
 
 	queryBuilder.WriteString("SELECT data FROM workflow_runs WHERE 1=1")
 
@@ -170,13 +260,16 @@ func (s *LibSQLStore) ListRuns(ctx context.Context, filter workflow.RunFilter) (
 	for rows.Next() {
 		var data []byte
 		if err := rows.Scan(&data); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to scan run: %w", err)
 		}
 		var run workflow.WorkflowRun
 		if err := json.Unmarshal(data, &run); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to unmarshal run: %w", err)
 		}
 		runs = append(runs, &run)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate runs: %w", err)
 	}
 	return runs, nil
 }
@@ -221,7 +314,7 @@ func (s *LibSQLStore) GetStepExecution(ctx context.Context, runID, stepID string
 	var data []byte
 	err := s.db.QueryRowContext(ctx, query, runID, stepID).Scan(&data)
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("step execution not found: %s/%s", runID, stepID)
+		return nil, workflow.ErrStepExecutionNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get step execution: %w", err)
@@ -278,13 +371,16 @@ func (s *LibSQLStore) ListStepExecutions(ctx context.Context, runID string) ([]*
 	for rows.Next() {
 		var data []byte
 		if err := rows.Scan(&data); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to scan step execution: %w", err)
 		}
 		var exec workflow.StepExecution
 		if err := json.Unmarshal(data, &exec); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to unmarshal step execution: %w", err)
 		}
 		execs = append(execs, &exec)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate step executions: %w", err)
 	}
 
 	return execs, nil
@@ -310,7 +406,7 @@ func (s *LibSQLStore) LoadStepOutput(ctx context.Context, runID, stepID string) 
 	var data []byte
 	err := s.db.QueryRowContext(ctx, query, runID, stepID).Scan(&data)
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("step output not found: %s/%s", runID, stepID)
+		return nil, workflow.ErrStepOutputNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to load step output: %w", err)
@@ -338,7 +434,7 @@ func (s *LibSQLStore) LoadState(ctx context.Context, runID, key string) ([]byte,
 	var value []byte
 	err := s.db.QueryRowContext(ctx, query, runID, key).Scan(&value)
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("state not found: %s/%s", runID, key)
+		return nil, workflow.ErrStateNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to load state: %w", err)
@@ -368,9 +464,12 @@ func (s *LibSQLStore) GetAllState(ctx context.Context, runID string) (map[string
 		var key string
 		var value []byte
 		if err := rows.Scan(&key, &value); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to scan state: %w", err)
 		}
 		state[key] = value
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate state: %w", err)
 	}
 	return state, nil
 }

@@ -4,6 +4,20 @@ import (
 	"fmt"
 )
 
+// NodeType defines the type of graph node
+type NodeType string
+
+const (
+	NodeTypeSequential  NodeType = "SEQUENTIAL"
+	NodeTypeParallel    NodeType = "PARALLEL"
+	NodeTypeConditional NodeType = "CONDITIONAL"
+)
+
+// String returns the string representation
+func (n NodeType) String() string {
+	return string(n)
+}
+
 // ExecutionGraph defines the workflow execution flow
 type ExecutionGraph struct {
 	EntryPoint string

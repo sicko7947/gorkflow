@@ -1,9 +1,6 @@
 package store
 
-import (
-	"fmt"
-	"strings"
-)
+import "strings"
 
 const (
 	// Table names
@@ -27,6 +24,8 @@ CREATE TABLE IF NOT EXISTS workflow_runs (
 );
 CREATE INDEX IF NOT EXISTS idx_runs_workflow_status ON workflow_runs(workflow_id, status);
 CREATE INDEX IF NOT EXISTS idx_runs_resource_status ON workflow_runs(resource_id, status);
+CREATE INDEX IF NOT EXISTS idx_runs_updated_at ON workflow_runs(updated_at);
+CREATE INDEX IF NOT EXISTS idx_runs_workflow_created ON workflow_runs(workflow_id, created_at);
 `
 
 	schemaStepExecutions = `
@@ -43,6 +42,7 @@ CREATE TABLE IF NOT EXISTS step_executions (
 	PRIMARY KEY (run_id, step_id)
 );
 CREATE INDEX IF NOT EXISTS idx_step_executions_run_index ON step_executions(run_id, execution_index);
+CREATE INDEX IF NOT EXISTS idx_step_executions_status ON step_executions(status);
 `
 
 	schemaStepOutputs = `
@@ -74,22 +74,4 @@ func GetLibSQLSchema() string {
 		schemaStepOutputs,
 		schemaWorkflowState,
 	}, "\n")
-}
-
-// Helper to format placeholders for SQL queries
-// LibSQL/SQLite uses ? for placeholders
-func placeholders(n int) string {
-	if n <= 0 {
-		return ""
-	}
-	return strings.Repeat("?,", n-1) + "?"
-}
-
-// Helper to build UPDATE set clause
-func buildUpdateSet(cols []string) string {
-	var sets []string
-	for _, col := range cols {
-		sets = append(sets, fmt.Sprintf("%s = ?", col))
-	}
-	return strings.Join(sets, ", ")
 }
