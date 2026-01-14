@@ -210,7 +210,7 @@ This was a basic sequential workflow. Now learn about:
 - **[Parallel Execution](../advanced-usage/parallel-execution.md)** - Run steps concurrently
 - **[Conditional Execution](../advanced-usage/conditional-execution.md)** - Dynamic workflows
 - **[Validation](../core-concepts/validation.md)** - Add input/output validation
-- **[Storage Backends](../storage/overview.md)** - Use DynamoDB or LibSQL
+- **[Storage Backends](../storage/overview.md)** - Use persistent storage (LibSQL)
 
 ## Common Variations
 

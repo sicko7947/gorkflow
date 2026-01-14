@@ -8,7 +8,7 @@ This documentation is organized into the following sections:
 
 ### 🚀 Getting Started
 
-- [Installation](getting-started/installation.md) - Get up and running with GorkFlow
+- [Installation](getting-started/installation.md) - Get up and running with Gorkflow
 - [Quick Start](getting-started/quick-start.md) - Build your first workflow in minutes
 - [First Workflow](getting-started/first-workflow.md) - Step-by-step tutorial
 - [Project Structure](getting-started/project-structure.md) - Organizing your workflow project
@@ -46,7 +46,6 @@ This documentation is organized into the following sections:
 
 - [Overview](storage/overview.md) - Available storage options
 - [Memory Store](storage/memory-store.md) - In-memory storage for testing
-- [DynamoDB Store](storage/dynamodb-store.md) - AWS DynamoDB persistence
 - [LibSQL Store](storage/libsql-store.md) - SQLite/Turso database persistence
 - [Custom Store](storage/custom-store.md) - Implementing custom storage backends
 
@@ -80,7 +79,7 @@ This documentation is organized into the following sections:
 - **✅ Built-in Validation** - Automatic validation using struct tags
 - **📊 DAG-Based Execution** - Directed acyclic graphs with sequential and parallel execution
 - **🔄 Smart Retry Logic** - Configurable retry policies with backoff strategies
-- **💾 Persistent State** - Pluggable storage backends (DynamoDB, LibSQL, in-memory)
+- **💾 Persistent State** - Pluggable storage backends (LibSQL, in-memory)
 - **⚡ Parallel Execution** - Execute independent steps concurrently
 - **🔍 Progress Tracking** - Real-time workflow and step-level monitoring
 - **⏱️ Timeout Support** - Per-step and workflow-level timeouts

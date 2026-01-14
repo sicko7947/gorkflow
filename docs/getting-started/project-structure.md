@@ -36,7 +36,6 @@ my-workflow-app/
 │       └── config.go            # Configuration
 ├── pkg/                         # Public packages (if any)
 ├── scripts/                     # Helper scripts
-│   └── create-dynamodb-table.sh
 ├── go.mod
 ├── go.sum
 └── README.md
@@ -144,8 +143,6 @@ func initStore(cfg *config.Config) (store.Store, error) {
     switch cfg.StoreType {
     case "memory":
         return store.NewMemoryStore(), nil
-    case "dynamodb":
-        return store.NewDynamoDBStore(/* ... */)
     case "libsql":
         return store.NewLibSQLStore(cfg.DatabaseURL)
     default:

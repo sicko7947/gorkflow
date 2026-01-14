@@ -109,11 +109,6 @@ func (e *Engine) StartWorkflow(
 		Tags:            options.Tags,
 	}
 
-	// Set TTL if specified
-	if options.TTL > 0 {
-		run.TTL = time.Now().Add(options.TTL).Unix()
-	}
-
 	// Persist run
 	if err := e.store.CreateRun(ctx, run); err != nil {
 		return "", fmt.Errorf("failed to create workflow run: %w", err)

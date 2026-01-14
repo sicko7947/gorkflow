@@ -6,7 +6,7 @@ package store
 // and store packages.
 //
 // This package contains concrete implementations:
-//   - DynamoDBStore: Production-ready AWS DynamoDB backend
 //   - MemoryStore: In-memory backend for testing
+//   - LibSQLStore: Persistent backend using LibSQL/SQLite
 //
 // Schema design follows single-table patterns defined in schema.go.

@@ -53,16 +53,6 @@ func(ctx context.Context, input TInput) (TOutput, error)  // ❌ Wrong!
 
 ### Store Connection Errors
 
-**DynamoDB**:
-
-```bash
-# Verify credentials
-aws sts get-caller-identity
-
-# Check table exists
-aws dynamodb describe-table --table-name workflow_executions
-```
-
 **LibSQL**:
 
 ```bash
@@ -89,7 +79,7 @@ step := gorkflow.NewStep("slow-step", "Slow Step", handler,
 
 **Problem**: High memory usage with MemoryStore
 
-**Solution**: Memory store keeps all data in RAM. For production, use DynamoDB or LibSQL:
+**Solution**: Memory store keeps all data in RAM. For production, use LibSQL:
 
 ```go
 // Switch to persistent store
@@ -167,7 +157,7 @@ gorkflow.NewWorkflow("user-registration-v2", "User Registration").
 ```
 
 **Q: What happens if the process crashes mid-workflow?**  
-A: With persistent storage (DynamoDB/LibSQL), you can implement recovery logic. The workflow state is saved after each step.
+A: With persistent storage (LibSQL), you can implement recovery logic. The workflow state is saved after each step.
 
 **Q: How many parallel steps can run?**  
 A: Limited by system resources. The engine manages concurrency automatically.

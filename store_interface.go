@@ -37,5 +37,4 @@ type RunFilter struct {
 	Status     *RunStatus
 	ResourceID string
 	Limit      int
-	LastKey    map[string]interface{}
 }

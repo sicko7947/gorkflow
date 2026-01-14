@@ -26,11 +26,11 @@ const (
 
 // WorkflowError represents an error during workflow execution
 type WorkflowError struct {
-	Message   string                 `json:"message" dynamodbav:"message"`
-	Code      string                 `json:"code" dynamodbav:"code"`
-	Step      string                 `json:"step,omitempty" dynamodbav:"step,omitempty"`
-	Timestamp time.Time              `json:"timestamp" dynamodbav:"timestamp"`
-	Details   map[string]interface{} `json:"details,omitempty" dynamodbav:"details,omitempty"`
+	Message   string                 `json:"message"`
+	Code      string                 `json:"code"`
+	Step      string                 `json:"step,omitempty"`
+	Timestamp time.Time              `json:"timestamp"`
+	Details   map[string]interface{} `json:"details,omitempty"`
 }
 
 // Error implements the error interface
@@ -68,11 +68,11 @@ func (e *WorkflowError) WithDetails(details map[string]interface{}) *WorkflowErr
 
 // StepError represents an error during step execution
 type StepError struct {
-	Message   string                 `json:"message" dynamodbav:"message"`
-	Code      string                 `json:"code" dynamodbav:"code"`
-	Timestamp time.Time              `json:"timestamp" dynamodbav:"timestamp"`
-	Attempt   int                    `json:"attempt" dynamodbav:"attempt"`
-	Details   map[string]interface{} `json:"details,omitempty" dynamodbav:"details,omitempty"`
+	Message   string                 `json:"message"`
+	Code      string                 `json:"code"`
+	Timestamp time.Time              `json:"timestamp"`
+	Attempt   int                    `json:"attempt"`
+	Details   map[string]interface{} `json:"details,omitempty"`
 }
 
 // Error implements the error interface

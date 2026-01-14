@@ -371,12 +371,7 @@ condition := func(ctx *gorkflow.StepContext) (bool, error) {
 ### Use Persistent Storage
 
 ```go
-// Use DynamoDB
-cfg, _ := config.LoadDefaultConfig(context.Background())
-client := dynamodb.NewFromConfig(cfg)
-store, _ := store.NewDynamoDBStore(client, "workflows")
-
-// Or use LibSQL
+// Use LibSQL
 store, _ := store.NewLibSQLStore("file:./workflows.db")
 ```
 

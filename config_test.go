@@ -103,15 +103,6 @@ func TestWithConcurrencyCheck(t *testing.T) {
 	assert.True(t, opts.CheckConcurrency)
 }
 
-func TestWithTTL(t *testing.T) {
-	opts := &StartOptions{}
-	ttl := 7 * 24 * time.Hour // 7 days
-	opt := WithTTL(ttl)
-	opt(opts)
-
-	assert.Equal(t, ttl, opts.TTL)
-}
-
 func TestWithTags(t *testing.T) {
 	opts := &StartOptions{}
 	tags := map[string]string{
@@ -129,12 +120,10 @@ func TestStartOptions_Multiple(t *testing.T) {
 
 	WithResourceID("resource-123")(opts)
 	WithConcurrencyCheck(true)(opts)
-	WithTTL(24 * time.Hour)(opts)
 	WithTags(map[string]string{"env": "test"})(opts)
 
 	assert.Equal(t, "resource-123", opts.ResourceID)
 	assert.True(t, opts.CheckConcurrency)
-	assert.Equal(t, 24*time.Hour, opts.TTL)
 	assert.Equal(t, "test", opts.Tags["env"])
 }
 

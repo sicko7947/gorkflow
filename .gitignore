@@ -33,3 +33,4 @@ workflow.db
 *.db
 *.db-shm
 *.db-wal
+.temp

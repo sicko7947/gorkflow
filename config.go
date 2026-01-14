@@ -114,7 +114,6 @@ type StartOption func(*StartOptions)
 type StartOptions struct {
 	ResourceID       string
 	CheckConcurrency bool
-	TTL              time.Duration
 	Tags             map[string]string
 
 	Synchronous bool
@@ -131,13 +130,6 @@ func WithResourceID(id string) StartOption {
 func WithConcurrencyCheck(check bool) StartOption {
 	return func(opts *StartOptions) {
 		opts.CheckConcurrency = check
-	}
-}
-
-// WithTTL sets the TTL duration for DynamoDB
-func WithTTL(ttl time.Duration) StartOption {
-	return func(opts *StartOptions) {
-		opts.TTL = ttl
 	}
 }
 

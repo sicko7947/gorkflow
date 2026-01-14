@@ -51,71 +51,68 @@ func (s StepStatus) String() string {
 // WorkflowRun represents a single workflow execution instance
 type WorkflowRun struct {
 	// Identity
-	RunID           string `json:"runId" dynamodbav:"run_id"`
-	WorkflowID      string `json:"workflowId" dynamodbav:"workflow_id"`
-	WorkflowVersion string `json:"workflowVersion" dynamodbav:"workflow_version"`
+	RunID           string `json:"runId"`
+	WorkflowID      string `json:"workflowId"`
+	WorkflowVersion string `json:"workflowVersion"`
 
 	// Status
-	Status   RunStatus `json:"status" dynamodbav:"status"`
-	Progress float64   `json:"progress" dynamodbav:"progress"` // 0.0 to 1.0
+	Status   RunStatus `json:"status"`
+	Progress float64   `json:"progress"` // 0.0 to 1.0
 
 	// Timing
-	CreatedAt   time.Time  `json:"createdAt" dynamodbav:"created_at"`
-	StartedAt   *time.Time `json:"startedAt,omitempty" dynamodbav:"started_at,omitempty"`
-	CompletedAt *time.Time `json:"completedAt,omitempty" dynamodbav:"completed_at,omitempty"`
-	UpdatedAt   time.Time  `json:"updatedAt" dynamodbav:"updated_at"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	StartedAt   *time.Time `json:"startedAt,omitempty"`
+	CompletedAt *time.Time `json:"completedAt,omitempty"`
+	UpdatedAt   time.Time  `json:"updatedAt"`
 
 	// Input/Output (serialized as JSON bytes)
-	Input  json.RawMessage `json:"input,omitempty" dynamodbav:"input,omitempty"`
-	Output json.RawMessage `json:"output,omitempty" dynamodbav:"output,omitempty"`
+	Input  json.RawMessage `json:"input,omitempty"`
+	Output json.RawMessage `json:"output,omitempty"`
 
 	// Error handling
-	Error *WorkflowError `json:"error,omitempty" dynamodbav:"error,omitempty"`
+	Error *WorkflowError `json:"error,omitempty"`
 
 	// Metadata
-	ResourceID string            `json:"resourceId,omitempty" dynamodbav:"resource_id,omitempty"`
-	Tags       map[string]string `json:"tags,omitempty" dynamodbav:"tags,omitempty"`
+	ResourceID string            `json:"resourceId,omitempty"`
+	Tags       map[string]string `json:"tags,omitempty"`
 
 	// Custom context (serialized as JSON bytes)
-	Context json.RawMessage `json:"context,omitempty" dynamodbav:"context,omitempty"`
-
-	// DynamoDB TTL
-	TTL int64 `json:"-" dynamodbav:"ttl,omitempty"`
+	Context json.RawMessage `json:"context,omitempty"`
 }
 
 // StepExecution tracks individual step execution within a workflow run
 type StepExecution struct {
 	// Identity
-	RunID          string `json:"runId" dynamodbav:"run_id"`
-	StepID         string `json:"stepId" dynamodbav:"step_id"`
-	ExecutionIndex int    `json:"executionIndex" dynamodbav:"execution_index"` // For tracking across retries
+	RunID          string `json:"runId"`
+	StepID         string `json:"stepId"`
+	ExecutionIndex int    `json:"executionIndex"` // For tracking across retries
 
 	// Status
-	Status StepStatus `json:"status" dynamodbav:"status"`
+	Status StepStatus `json:"status"`
 
 	// Timing
-	StartedAt   *time.Time `json:"startedAt,omitempty" dynamodbav:"started_at,omitempty"`
-	CompletedAt *time.Time `json:"completedAt,omitempty" dynamodbav:"completed_at,omitempty"`
-	DurationMs  int64      `json:"durationMs" dynamodbav:"duration_ms"`
+	StartedAt   *time.Time `json:"startedAt,omitempty"`
+	CompletedAt *time.Time `json:"completedAt,omitempty"`
+	DurationMs  int64      `json:"durationMs"`
 
 	// Input/Output (serialized as JSON bytes)
-	Input  json.RawMessage `json:"input,omitempty" dynamodbav:"input,omitempty"`
-	Output json.RawMessage `json:"output,omitempty" dynamodbav:"output,omitempty"`
+	Input  json.RawMessage `json:"input,omitempty"`
+	Output json.RawMessage `json:"output,omitempty"`
 
 	// Error handling
-	Error   *StepError `json:"error,omitempty" dynamodbav:"error,omitempty"`
-	Attempt int        `json:"attempt" dynamodbav:"attempt"` // Current retry attempt
+	Error   *StepError `json:"error,omitempty"`
+	Attempt int        `json:"attempt"` // Current retry attempt
 
 	// Metadata
-	CreatedAt time.Time `json:"createdAt" dynamodbav:"created_at"`
-	UpdatedAt time.Time `json:"updatedAt" dynamodbav:"updated_at"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // WorkflowState holds business data separate from execution metadata
 type WorkflowState struct {
-	RunID     string            `json:"runId" dynamodbav:"run_id"`
-	Data      map[string][]byte `json:"data" dynamodbav:"data"` // Key-value store (values are JSON)
-	UpdatedAt time.Time         `json:"updatedAt" dynamodbav:"updated_at"`
+	RunID     string            `json:"runId"`
+	Data      map[string][]byte `json:"data"` // Key-value store (values are JSON)
+	UpdatedAt time.Time         `json:"updatedAt"`
 }
 
 // NodeType defines the type of graph node

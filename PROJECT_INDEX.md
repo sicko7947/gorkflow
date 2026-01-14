@@ -28,11 +28,7 @@ gorkflow/
 │   ├── schema.go
 │   ├── schema_test.go
 │   ├── memory.go
-│   ├── memory_test.go
-│   ├── dynamodb.go
-│   ├── dynamodb_test.go
-│   ├── dynamodb_client.go
-│   └── dynamodb_integration_test.go
+│   └── memory_test.go
 ├── example/              # Complete working example
 │   ├── workflow.go
 │   ├── steps.go
@@ -86,7 +82,6 @@ gorkflow/
 - **Package:** `store`
 - **Implementations:**
   - `NewMemoryStore()` - In-memory storage
-  - `NewDynamoDBStore()` - AWS DynamoDB persistence
 
 ### Example Package
 
@@ -207,20 +202,6 @@ gorkflow/
 
 ---
 
-### Module: DynamoDB Store
-
-**Files:** `store/dynamodb.go`, `store/dynamodb_client.go`
-
-**Exports:**
-
-- `type DynamoDBStore` - DynamoDB implementation
-- `NewDynamoDBStore()` - Create store with AWS client
-- Schema mapping and marshaling
-
-**Purpose:** Production-ready persistent storage using AWS DynamoDB
-
----
-
 ### Module: Data Models
 
 **Files:** `models.go`
@@ -317,8 +298,6 @@ Not required for library usage. Configuration via code.
 ### Integration Tests
 
 - Engine integration: `engine/engine_integration_test.go`
-- DynamoDB integration: `store/dynamodb_integration_test.go`
-- DynamoDB store tests: `store/dynamodb_test.go`
 
 ### Test Execution
 
@@ -339,8 +318,6 @@ go test -tags=integration ./store/...
 
 ### Core Dependencies
 
-- **aws/aws-sdk-go-v2** (v1.40.0) - AWS SDK for DynamoDB
-- **aws/aws-sdk-go-v2/service/dynamodb** (v1.53.1) - DynamoDB client
 - **google/uuid** (v1.6.0) - UUID generation for run IDs
 - **rs/zerolog** (v1.34.0) - Structured logging
 
@@ -455,7 +432,7 @@ Implement complex state transitions
 
 - Pluggable store interface
 - In-memory for development
-- DynamoDB for production
+- LibSQL for persistence
 
 ### Observability
 
@@ -467,10 +444,10 @@ Implement complex state transitions
 
 ## 📊 Key Metrics
 
-- **Total Go Files:** 38
+- **Total Go Files:** 34
 - **Core Packages:** 4 (root, builder, engine, store)
-- **Store Implementations:** 2 (Memory, DynamoDB)
-- **Test Files:** 11
+- **Store Implementations:** 2 (Memory, LibSQL)
+- **Test Files:** 9
 - **Example Files:** 5
 - **Documentation:** 3 files
 

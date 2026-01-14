@@ -8,7 +8,6 @@ Gorkflow supports multiple storage backends for persisting workflow state. Choos
 | ----------------- | ----------------------- | ----------- | --------------- | ---------------- |
 | **Memory**        | Development, Testing    | None        | Single Instance | None             |
 | **LibSQL/SQLite** | Small-Medium Apps, Edge | File/Remote | Medium          | Low              |
-| **DynamoDB**      | Large-Scale, AWS        | Cloud       | High            | Medium           |
 
 ## Memory Store
 
@@ -78,47 +77,6 @@ store, err := store.NewLibSQLStore("libsql://my-db.turso.io?authToken=...")
 
 See [LibSQL Store](libsql-store.md) for details.
 
-## DynamoDB Store
-
-AWS DynamoDB for large-scale, cloud-native applications.
-
-### Features
-
-✅ **Fully managed** - AWS handles infrastructure  
-✅ **Highly scalable** - Handles massive workloads  
-✅ **Multi-region** - Global distribution  
-✅ **High availability** - 99.99% SLA  
-✅ **Pay-per-request** - Cost-effective at scale  
-↔️ **AWS-only** - Requires AWS account  
-↔️ **Setup required** - Table creation needed
-
-### Usage
-
-```go
-import (
-    "github.com/sicko7947/gorkflow/store"
-    "github.com/aws/aws-sdk-go-v2/config"
-    "github.com/aws/aws-sdk-go-v2/service/dynamodb"
-)
-
-// Load AWS config
-cfg, _ := config.LoadDefaultConfig(context.Background())
-client := dynamodb.NewFromConfig(cfg)
-
-// Create store
-store, err := store.NewDynamoDBStore(client, "workflow-table")
-```
-
-### When to Use
-
-- Large-scale applications
-- Multiple availability zones
-- Global deployments
-- AWS-based infrastructure
-- High-throughput workflows
-
-See [DynamoDB Store](dynamodb-store.md) for details.
-
 ## Comparison
 
 ### Performance
@@ -128,7 +86,6 @@ See [DynamoDB Store](dynamodb-store.md) for details.
 | Memory          | ~0.01ms       | ~0.01ms      | Very High  |
 | LibSQL (Local)  | ~1-5ms        | ~0.1-1ms     | Medium     |
 | LibSQL (Remote) | ~10-50ms      | ~10-50ms     | Medium     |
-| DynamoDB        | ~5-20ms       | ~5-10ms      | Very High  |
 
 ### Cost
 
@@ -137,7 +94,6 @@ See [DynamoDB Store](dynamodb-store.md) for details.
 | Memory         | Free        | Free                            |
 | LibSQL (Local) | Free        | Free                            |
 | LibSQL (Turso) | Free (5GB)  | ~$15-50                         |
-| DynamoDB       | Free tier   | ~$5-30                          |
 
 ### Scaling
 
@@ -152,12 +108,6 @@ LibSQL Store
      ├─ Single writer (local file)
      ├─ Multiple readers (Turso)
      └─ Regional scaling
-
-DynamoDB Store
-  └─ Fully Distributed
-     ├─ Auto-scaling
-     ├─ Multi-region replication
-     └─ Unlimited scaling
 ```
 
 ## Choosing a Backend
@@ -181,13 +131,6 @@ store, _ := store.NewLibSQLStore("file:./workflows.db")
 ```go
 // Use LibSQL with Turso for reliability
 store, _ := store.NewLibSQLStore("libsql://my-db.turso.io?authToken=...")
-```
-
-### Large Application (> 100k workflows/day)
-
-```go
-// Use DynamoDB for scale
-store, _ := store.NewDynamoDBStore(dynamoClient, "workflows")
 ```
 
 ## Migration Between Backends
@@ -238,12 +181,11 @@ See [Custom Store](custom-store.md) for details.
 ### 1. Match Backend to Use Case
 
 Development → Memory  
-Small App → LibSQL  
-Large App → DynamoDB
+Small/Medium App → LibSQL
 
 ### 2. Plan for Growth
 
-Start with LibSQL, migrate to DynamoDB when needed.
+Start with LibSQL for persistence needs.
 
 ### 3. Test with Production Backend
 
@@ -260,9 +202,6 @@ Remove old workflow runs to manage storage:
 ```go
 // LibSQL: Direct SQL cleanup
 db.Exec("DELETE FROM workflow_runs WHERE created_at < ?", cutoffDate)
-
-// DynamoDB: Scan and delete
-// Implement TTL or manual cleanup
 ```
 
 ## Environment-Based Configuration
@@ -272,12 +211,8 @@ func initStore(env string) (store.Store, error) {
     switch env {
     case "development":
         return store.NewMemoryStore(), nil
-    case "staging":
+    case "staging", "production":
         return store.NewLibSQLStore("file:./workflows.db")
-    case "production":
-        cfg, _ := config.LoadDefaultConfig(context.Background())
-        client := dynamodb.NewFromConfig(cfg)
-        return store.NewDynamoDBStore(client, "workflows")
     default:
         return store.NewMemoryStore(), nil
     }
@@ -290,4 +225,3 @@ func initStore(env string) (store.Store, error) {
 
 - [Memory Store](memory-store.md)
 - [LibSQL Store](libsql-store.md)
-- [DynamoDB Store](dynamodb-store.md)

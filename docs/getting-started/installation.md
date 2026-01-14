@@ -41,13 +41,6 @@ require (
 
 Depending on which storage backend you choose, you may need additional dependencies:
 
-#### For DynamoDB Store
-
-```bash
-go get github.com/aws/aws-sdk-go-v2
-go get github.com/aws/aws-sdk-go-v2/service/dynamodb
-```
-
 #### For LibSQL/SQLite Store
 
 ```bash

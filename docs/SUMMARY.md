@@ -42,7 +42,6 @@
 
 - [Overview](storage/overview.md)
 - [Memory Store](storage/memory-store.md)
-- [DynamoDB Store](storage/dynamodb-store.md)
 - [LibSQL Store](storage/libsql-store.md)
 - [Custom Store](storage/custom-store.md)
 

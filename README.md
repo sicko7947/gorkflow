@@ -17,7 +17,7 @@ Gorkflow is a lightweight, type-safe workflow orchestration engine that makes it
 - **✅ Auto-Validation** - Built-in input/output validation with struct tags
 - **📊 DAG-Based** - Sequential, parallel, and conditional execution
 - **🔄 Smart Retries** - Configurable retry policies with backoff strategies
-- **💾 Persistent** - Multiple storage backends (DynamoDB, LibSQL/SQLite, in-memory)
+- **💾 Persistent** - Multiple storage backends (LibSQL/SQLite, in-memory)
 - **⚡ Parallel** - Execute independent steps concurrently
 - **🎨 Conditional** - Dynamic workflow paths based on runtime data
 - **🏗️ Fluent API** - Easy-to-use builder pattern
@@ -85,7 +85,7 @@ Visit our **[comprehensive documentation](https://cai139193541.gitbook.io/gorkfl
 - **[Getting Started](https://cai139193541.gitbook.io/gorkflow/getting-started/installation)** - Installation, quick start, and tutorials
 - **[Core Concepts](https://cai139193541.gitbook.io/gorkflow/core-concepts/workflows)** - Workflows, steps, validation, state management
 - **[Advanced Usage](https://cai139193541.gitbook.io/gorkflow/advanced-usage/parallel-execution)** - Parallel execution, conditionals, error handling
-- **[Storage Backends](https://cai139193541.gitbook.io/gorkflow/storage/overview)** - DynamoDB, LibSQL, in-memory stores
+- **[Storage Backends](https://cai139193541.gitbook.io/gorkflow/storage/overview)** - LibSQL, in-memory stores
 - **[API Reference](https://cai139193541.gitbook.io/gorkflow/api-reference/workflow-builder)** - Complete API documentation
 
 ## 💡 Examples
@@ -112,7 +112,7 @@ Check out the [examples/](example/) directory for complete, runnable examples:
        │
        ↓
 ┌─────────────┐
-│    Store    │  Persists state (Memory/DynamoDB/LibSQL)
+│    Store    │  Persists state (Memory/LibSQL)
 └─────────────┘
 ```
 
@@ -172,14 +172,12 @@ wf, _ := gorkflow.NewWorkflow("cond", "Conditional").
 | ------------ | ----------------------- | ----------------------------------------- |
 | **Memory**   | Development, Testing    | `store.NewMemoryStore()`                  |
 | **LibSQL**   | Small-Medium Apps, Edge | `store.NewLibSQLStore("file:./db")`       |
-| **DynamoDB** | Large-Scale, Cloud      | `store.NewDynamoDBStore(client, "table")` |
 
 See [Storage Documentation](https://cai139193541.gitbook.io/gorkflow/storage/overview) for details.
 
 ## 📦 Requirements
 
 - **Go 1.21+** (uses generics)
-- Optional: AWS SDK v2 (for DynamoDB)
 - Optional: LibSQL client (for SQLite/Turso)
 
 ## 🤝 Contributing
