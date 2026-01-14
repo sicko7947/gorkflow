@@ -353,12 +353,3 @@ func (e *Engine) Cancel(ctx context.Context, runID string) error {
 func (e *Engine) ListRuns(ctx context.Context, filter gorkflow.RunFilter) ([]*gorkflow.WorkflowRun, error) {
 	return e.store.ListRuns(ctx, filter)
 }
-
-// isParallelStep checks if a step should be executed in parallel with others
-func (e *Engine) isParallelStep(graph *gorkflow.ExecutionGraph, stepID string) bool {
-	node, exists := graph.Nodes[stepID]
-	if !exists {
-		return false
-	}
-	return node.Type == gorkflow.NodeTypeParallel
-}

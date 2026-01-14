@@ -251,8 +251,11 @@ Access in steps:
 
 ```go
 func handler(ctx *gorkflow.StepContext, input MyInput) (MyOutput, error) {
-    myCtx, _ := gorkflow.GetContext[MyContext](ctx)
-    logger.Info().Str("user_id", myCtx.UserID).Msg("Processing")
+    myCtx, err := gorkflow.GetContext[MyContext](ctx)
+    if err != nil {
+        return MyOutput{}, err
+    }
+    ctx.Logger.Info().Str("user_id", myCtx.UserID).Msg("Processing")
     // ...
 }
 ```
@@ -395,11 +398,11 @@ if err != nil {
 run, _ := eng.GetRun(ctx, runID)
 
 switch run.Status {
-case "completed":
+case gorkflow.RunStatusCompleted:
     // Success
-case "failed":
-    fmt.Println("Error:", *run.Error)
-case "cancelled":
+case gorkflow.RunStatusFailed:
+    fmt.Println("Error:", run.Error.Message)
+case gorkflow.RunStatusCancelled:
     // Cancelled by user
 }
 ```

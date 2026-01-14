@@ -74,12 +74,13 @@ The `StepContext` provides:
 
 ```go
 type StepContext struct {
-    Context  context.Context    // Go context for cancellation
-    Logger   zerolog.Logger     // Structured logger
-    State    StateAccessor      // Workflow state
-    Outputs  OutputAccessor     // Previous step outputs
-    RunID    string            // Workflow run ID
-    StepID   string            // Current step ID
+    Context       context.Context    // Go context for cancellation
+    Logger        zerolog.Logger     // Structured logger
+    State         StateAccessor      // Workflow state
+    Data          StepDataAccessor   // Previous step outputs/inputs
+    RunID         string             // Workflow run ID
+    StepID        string             // Current step ID
+    CustomContext any                // User-defined context
 }
 ```
 
@@ -94,11 +95,13 @@ func handler(ctx *gorkflow.StepContext, input MyInput) (MyOutput, error) {
     var counter int
     ctx.State.Get("counter", &counter)
     counter++
-    ctx.State.Set(ctx.Context, "counter", counter)
+    ctx.State.Set("counter", counter)
 
-    // 3. Get previous step output
-    var prevOutput PreviousStepOutput
-    ctx.Outputs.Get(ctx.Context, "previous-step-id", &prevOutput)
+    // 3. Get previous step output (type-safe helper)
+    prevOutput, err := gorkflow.GetOutput[PreviousStepOutput](ctx, "previous-step-id")
+    if err != nil {
+        return MyOutput{}, err
+    }
 
     // 4. Check for cancellation
     select {
@@ -293,14 +296,10 @@ step := gorkflow.NewStep(
     "aggregate",
     "Aggregate Results",
     func(ctx *gorkflow.StepContext, input AggInput) (AggOutput, error) {
-        // Get outputs from multiple previous steps
-        var result1 Result1
-        var result2 Result2
-        var result3 Result3
-
-        ctx.Outputs.Get(ctx.Context, "step1", &result1)
-        ctx.Outputs.Get(ctx.Context, "step2", &result2)
-        ctx.Outputs.Get(ctx.Context, "step3", &result3)
+        // Get outputs from multiple previous steps (type-safe)
+        result1, _ := gorkflow.GetOutput[Result1](ctx, "step1")
+        result2, _ := gorkflow.GetOutput[Result2](ctx, "step2")
+        result3, _ := gorkflow.GetOutput[Result3](ctx, "step3")
 
         // Aggregate
         total := result1.Value + result2.Value + result3.Value

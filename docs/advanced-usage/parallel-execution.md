@@ -96,14 +96,10 @@ func main() {
         "aggregate",
         "Aggregate Results",
         func(ctx *gorkflow.StepContext, input DataInput) (AggregatedOutput, error) {
-            // Get outputs from all parallel steps
-            var a ProcessedA
-            var b ProcessedB
-            var c ProcessedC
-
-            ctx.Outputs.Get(ctx.Context, "process-a", &a)
-            ctx.Outputs.Get(ctx.Context, "process-b", &b)
-            ctx.Outputs.Get(ctx.Context, "process-c", &c)
+            // Get outputs from all parallel steps (type-safe)
+            a, _ := gorkflow.GetOutput[ProcessedA](ctx, "process-a")
+            b, _ := gorkflow.GetOutput[ProcessedB](ctx, "process-b")
+            c, _ := gorkflow.GetOutput[ProcessedC](ctx, "process-c")
 
             combined := fmt.Sprintf("%s|%s|%s", a.ResultA, b.ResultB, c.ResultC)
             return AggregatedOutput{Combined: combined}, nil
@@ -183,18 +179,17 @@ aggregateStep := gorkflow.NewStep(
     "aggregate",
     "Aggregate Results",
     func(ctx *gorkflow.StepContext, input MyInput) (MyOutput, error) {
-        // Get outputs from each parallel step
-        var stepA StepAOutput
-        var stepB StepBOutput
-        var stepC StepCOutput
-
-        if err := ctx.Outputs.Get(ctx.Context, "step-a", &stepA); err != nil {
+        // Get outputs from each parallel step (type-safe)
+        stepA, err := gorkflow.GetOutput[StepAOutput](ctx, "step-a")
+        if err != nil {
             return MyOutput{}, err
         }
-        if err := ctx.Outputs.Get(ctx.Context, "step-b", &stepB); err != nil {
+        stepB, err := gorkflow.GetOutput[StepBOutput](ctx, "step-b")
+        if err != nil {
             return MyOutput{}, err
         }
-        if err := ctx.Outputs.Get(ctx.Context, "step-c", &stepC); err != nil {
+        stepC, err := gorkflow.GetOutput[StepCOutput](ctx, "step-c")
+        if err != nil {
             return MyOutput{}, err
         }
 
@@ -260,11 +255,8 @@ Check which steps succeeded in the aggregation step:
 
 ```go
 func aggregate(ctx *gorkflow.StepContext, input MyInput) (MyOutput, error) {
-    var a AOutput
-    errA := ctx.Outputs.Get(ctx.Context, "step-a", &a)
-
-    var b BOutput
-    errB := ctx.Outputs.Get(ctx.Context, "step-b", &b)
+    a, errA := gorkflow.GetOutput[AOutput](ctx, "step-a")
+    b, errB := gorkflow.GetOutput[BOutput](ctx, "step-b")
 
     // Handle partial success
     if errA != nil && errB != nil {
@@ -378,8 +370,8 @@ func aggregate(ctx *gorkflow.StepContext, input MyInput) (MyOutput, error) {
 
     // Try to get each result, skip failures
     for _, stepID := range []string{"step-a", "step-b", "step-c"} {
-        var result StepResult
-        if err := ctx.Outputs.Get(ctx.Context, stepID, &result); err == nil {
+        result, err := gorkflow.GetOutput[StepResult](ctx, stepID)
+        if err == nil {
             results = append(results, result.Data)
         }
     }

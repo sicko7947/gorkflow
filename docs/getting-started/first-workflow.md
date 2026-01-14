@@ -171,9 +171,9 @@ func NewFormatStep() *gorkflow.Step[EmailResult, RegistrationOutput] {
         "format_output",
         "Format Registration Output",
         func(ctx *gorkflow.StepContext, input EmailResult) (RegistrationOutput, error) {
-            // Get user data from previous steps
-            var userRecord UserRecord
-            if err := ctx.Outputs.Get(ctx.Context, "create_user", &userRecord); err != nil {
+            // Get user data from previous steps using type-safe helper
+            userRecord, err := gorkflow.GetOutput[UserRecord](ctx, "create_user")
+            if err != nil {
                 return RegistrationOutput{}, fmt.Errorf("failed to get user record: %w", err)
             }
 
@@ -193,7 +193,7 @@ func NewFormatStep() *gorkflow.Step[EmailResult, RegistrationOutput] {
 - Each step is a separate function returning `*gorkflow.Step[TIn, TOut]`
 - Use `ctx.Logger` for structured logging
 - Configure retries and timeouts per step
-- Access previous step outputs via `ctx.Outputs`
+- Access previous step outputs via `ctx.Data` or type-safe `gorkflow.GetOutput[T](ctx, stepID)`
 
 ## Step 4: Build the Workflow
 
@@ -300,7 +300,7 @@ func main() {
     }
 
     if run.Error != nil {
-        fmt.Printf("Error: %s\n", *run.Error)
+        fmt.Printf("Error: %s\n", run.Error.Message)
     }
 }
 ```

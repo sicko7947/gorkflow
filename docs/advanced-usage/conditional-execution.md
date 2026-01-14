@@ -72,8 +72,8 @@ func main() {
         "Setup Flags",
         func(ctx *gorkflow.StepContext, input SetupInput) (SetupOutput, error) {
             // Store flags in workflow state
-            ctx.State.Set(ctx.Context, "process_data", input.ProcessData)
-            ctx.State.Set(ctx.Context, "use_formatted", input.UseFormatted)
+            ctx.State.Set("process_data", input.ProcessData)
+            ctx.State.Set("use_formatted", input.UseFormatted)
 
             return SetupOutput{
                 ProcessData:  input.ProcessData,
@@ -148,8 +148,7 @@ condition := func(ctx *gorkflow.StepContext) (bool, error) {
 
 ```go
 condition := func(ctx *gorkflow.StepContext) (bool, error) {
-    var prevOutput PreviousStepOutput
-    err := ctx.Outputs.Get(ctx.Context, "previous-step-id", &prevOutput)
+    prevOutput, err := gorkflow.GetOutput[PreviousStepOutput](ctx, "previous-step-id")
     if err != nil {
         return false, err
     }
@@ -237,8 +236,10 @@ wf, _ := gorkflow.NewWorkflow("wf", "Workflow").
 
 ```go
 needsEnrichment := func(ctx *gorkflow.StepContext) (bool, error) {
-    var data UserData
-    ctx.Outputs.Get(ctx.Context, "fetch-user", &data)
+    data, err := gorkflow.GetOutput[UserData](ctx, "fetch-user")
+    if err != nil {
+        return false, err
+    }
     return data.Email != "" && data.Company == "", nil
 }
 
@@ -253,8 +254,10 @@ wf, _ := gorkflow.NewWorkflow("wf", "Workflow").
 
 ```go
 shouldNotify := func(ctx *gorkflow.StepContext) (bool, error) {
-    var result ProcessResult
-    ctx.Outputs.Get(ctx.Context, "process", &result)
+    result, err := gorkflow.GetOutput[ProcessResult](ctx, "process")
+    if err != nil {
+        return false, err
+    }
     return result.ChangesDetected, nil
 }
 
@@ -349,8 +352,7 @@ condition := func(ctx *gorkflow.StepContext) (bool, error) {
 
 ```go
 condition := func(ctx *gorkflow.StepContext) (bool, error) {
-    var data SomeData
-    err := ctx.Outputs.Get(ctx.Context, "step-id", &data)
+    data, err := gorkflow.GetOutput[SomeData](ctx, "step-id")
     if err != nil {
         // Decide: fail workflow or default to false
         return false, nil  // Default to skipping step
