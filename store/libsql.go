@@ -328,28 +328,54 @@ func (s *LibSQLStore) GetStepExecution(ctx context.Context, runID, stepID string
 }
 
 func (s *LibSQLStore) UpdateStepExecution(ctx context.Context, exec *workflow.StepExecution) error {
-	data, err := json.Marshal(exec)
-	if err != nil {
-		return fmt.Errorf("failed to marshal step execution: %w", err)
-	}
-
-	query := `
-		UPDATE step_executions 
-		SET status = ?, started_at = ?, completed_at = ?, error = ?, data = ?
-		WHERE run_id = ? AND step_id = ?
-	`
 	var errStr sql.NullString
 	if exec.Error != nil {
 		errStr.String = exec.Error.Error()
 		errStr.Valid = true
 	}
 
-	_, err = s.db.ExecContext(ctx, query,
+	// Use json_set for atomic partial update of status, timing, and error fields
+	query := `
+		UPDATE step_executions 
+		SET status = ?, 
+		    started_at = ?, 
+		    completed_at = ?, 
+		    error = ?,
+		    data = json_set(data, 
+		        '$.status', ?, 
+		        '$.startedAt', ?, 
+		        '$.completedAt', ?, 
+		        '$.durationMs', ?,
+		        '$.attempt', ?,
+		        '$.error', json_set('{}', '$.message', ?))
+		WHERE run_id = ? AND step_id = ?
+	`
+
+	// Prepare timestamp formats for JSON
+	var startedAtJSON, completedAtJSON any
+	if exec.StartedAt != nil {
+		startedAtJSON = exec.StartedAt.Format(time.RFC3339Nano)
+	}
+	if exec.CompletedAt != nil {
+		completedAtJSON = exec.CompletedAt.Format(time.RFC3339Nano)
+	}
+
+	var errMsg any
+	if exec.Error != nil {
+		errMsg = exec.Error.Error()
+	}
+
+	_, err := s.db.ExecContext(ctx, query,
 		string(exec.Status),
 		exec.StartedAt,
 		exec.CompletedAt,
 		errStr,
-		string(data),
+		string(exec.Status),
+		startedAtJSON,
+		completedAtJSON,
+		exec.DurationMs,
+		exec.Attempt,
+		errMsg,
 		exec.RunID,
 		exec.StepID,
 	)
