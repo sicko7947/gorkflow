@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
 	"github.com/sicko7947/gorkflow"
 	"github.com/sicko7947/gorkflow/store"
 	"github.com/stretchr/testify/assert"
@@ -26,25 +26,28 @@ func newTestPostgresStore(t *testing.T) *store.PostgresStore {
 	if dsn == "" {
 		t.Skip("set GORKFLOW_TEST_POSTGRES_DSN to run PostgreSQL store tests")
 	}
-
-	// Truncate all tables before each test for isolation.
 	truncatePostgresTables(t, dsn)
-
 	s, err := store.NewPostgresStore(dsn)
 	require.NoError(t, err)
 	t.Cleanup(func() { s.Close() })
 	return s
 }
 
+// truncatePostgresTables clears all tables using a single connection (not a pool).
 func truncatePostgresTables(t *testing.T, dsn string) {
 	t.Helper()
-	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, dsn)
-	require.NoError(t, err)
-	defer pool.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	_, err = pool.Exec(ctx, `
-		TRUNCATE TABLE workflow_state, step_outputs, step_executions, workflow_runs CASCADE
+	conn, err := pgx.Connect(ctx, dsn)
+	require.NoError(t, err)
+	defer conn.Close(ctx)
+
+	// workflow_state, step_outputs, step_executions all FK-reference workflow_runs,
+	// so truncating in dependency order (or using RESTART IDENTITY CASCADE) is safe.
+	_, err = conn.Exec(ctx, `
+		TRUNCATE TABLE workflow_state, step_outputs, step_executions, workflow_runs
+		RESTART IDENTITY
 	`)
 	require.NoError(t, err)
 }
@@ -75,6 +78,16 @@ func TestPostgres_GetRun_NotFound(t *testing.T) {
 	assert.ErrorIs(t, err, gorkflow.ErrRunNotFound)
 }
 
+func TestPostgres_UpdateRun_NotFound(t *testing.T) {
+	s := newTestPostgresStore(t)
+	run := &gorkflow.WorkflowRun{
+		RunID: "ghost-run", WorkflowID: "wf-1",
+		Status: gorkflow.RunStatusRunning, UpdatedAt: time.Now().UTC(),
+	}
+	err := s.UpdateRun(context.Background(), run)
+	assert.ErrorIs(t, err, gorkflow.ErrRunNotFound)
+}
+
 func TestPostgres_UpdateRun_StatusTransitions(t *testing.T) {
 	s := newTestPostgresStore(t)
 	ctx := context.Background()
@@ -102,13 +115,13 @@ func TestPostgres_UpdateRun_StatusTransitions(t *testing.T) {
 	}
 }
 
-func TestPostgres_ListRuns_WithFilter(t *testing.T) {
+func TestPostgres_ListRuns_WithWorkflowIDFilter(t *testing.T) {
 	s := newTestPostgresStore(t)
 	ctx := context.Background()
 
 	for i, wfID := range []string{"wf-a", "wf-a", "wf-b"} {
 		run := &gorkflow.WorkflowRun{
-			RunID:      fmt.Sprintf("pg-list-run-%d", i),
+			RunID:      fmt.Sprintf("pg-list-wf-%d", i),
 			WorkflowID: wfID,
 			Status:     gorkflow.RunStatusCompleted,
 			CreatedAt:  time.Now().UTC(),
@@ -120,6 +133,53 @@ func TestPostgres_ListRuns_WithFilter(t *testing.T) {
 	runs, err := s.ListRuns(ctx, gorkflow.RunFilter{WorkflowID: "wf-a"})
 	require.NoError(t, err)
 	assert.Len(t, runs, 2)
+}
+
+func TestPostgres_ListRuns_WithStatusFilter(t *testing.T) {
+	s := newTestPostgresStore(t)
+	ctx := context.Background()
+
+	statuses := []gorkflow.RunStatus{
+		gorkflow.RunStatusCompleted,
+		gorkflow.RunStatusFailed,
+		gorkflow.RunStatusCompleted,
+	}
+	for i, st := range statuses {
+		st := st
+		run := &gorkflow.WorkflowRun{
+			RunID: fmt.Sprintf("pg-list-status-%d", i), WorkflowID: "wf-1",
+			Status: st, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+		}
+		require.NoError(t, s.CreateRun(ctx, run))
+	}
+
+	runs, err := s.ListRuns(ctx, gorkflow.RunFilter{Status: statusPtr(gorkflow.RunStatusCompleted)})
+	require.NoError(t, err)
+	assert.Len(t, runs, 2)
+}
+
+func TestPostgres_ListRuns_WithLimit(t *testing.T) {
+	s := newTestPostgresStore(t)
+	ctx := context.Background()
+
+	for i := 0; i < 5; i++ {
+		run := &gorkflow.WorkflowRun{
+			RunID: fmt.Sprintf("pg-list-limit-%d", i), WorkflowID: "wf-1",
+			Status: gorkflow.RunStatusCompleted, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+		}
+		require.NoError(t, s.CreateRun(ctx, run))
+	}
+
+	runs, err := s.ListRuns(ctx, gorkflow.RunFilter{Limit: 3})
+	require.NoError(t, err)
+	assert.Len(t, runs, 3)
+}
+
+func TestPostgres_ListRuns_Empty(t *testing.T) {
+	s := newTestPostgresStore(t)
+	runs, err := s.ListRuns(context.Background(), gorkflow.RunFilter{WorkflowID: "no-such-wf"})
+	require.NoError(t, err)
+	assert.Empty(t, runs)
 }
 
 func TestPostgres_StepExecution_FullLifecycle(t *testing.T) {
@@ -139,6 +199,7 @@ func TestPostgres_StepExecution_FullLifecycle(t *testing.T) {
 	}
 	require.NoError(t, s.CreateStepExecution(ctx, exec))
 
+	// PENDING → RUNNING
 	now := time.Now().UTC()
 	exec.Status = gorkflow.StepStatusRunning
 	exec.StartedAt = &now
@@ -147,6 +208,33 @@ func TestPostgres_StepExecution_FullLifecycle(t *testing.T) {
 	got, err := s.GetStepExecution(ctx, "pg-step-run", "step-1")
 	require.NoError(t, err)
 	assert.Equal(t, gorkflow.StepStatusRunning, got.Status)
+
+	// RUNNING → COMPLETED
+	completedAt := time.Now().UTC()
+	exec.Status = gorkflow.StepStatusCompleted
+	exec.CompletedAt = &completedAt
+	require.NoError(t, s.UpdateStepExecution(ctx, exec))
+
+	got, err = s.GetStepExecution(ctx, "pg-step-run", "step-1")
+	require.NoError(t, err)
+	assert.Equal(t, gorkflow.StepStatusCompleted, got.Status)
+}
+
+func TestPostgres_GetStepExecution_NotFound(t *testing.T) {
+	s := newTestPostgresStore(t)
+	_, err := s.GetStepExecution(context.Background(), "no-run", "no-step")
+	assert.ErrorIs(t, err, gorkflow.ErrStepExecutionNotFound)
+}
+
+func TestPostgres_UpdateStepExecution_NotFound(t *testing.T) {
+	s := newTestPostgresStore(t)
+	exec := &gorkflow.StepExecution{
+		RunID: "ghost-run", StepID: "ghost-step",
+		Status: gorkflow.StepStatusRunning,
+		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+	err := s.UpdateStepExecution(context.Background(), exec)
+	assert.ErrorIs(t, err, gorkflow.ErrStepExecutionNotFound)
 }
 
 func TestPostgres_StepOutputs_SaveAndLoad(t *testing.T) {
@@ -174,6 +262,25 @@ func TestPostgres_StepOutputs_SaveAndLoad(t *testing.T) {
 	assert.Equal(t, updated, got)
 }
 
+func TestPostgres_StepOutputs_Binary(t *testing.T) {
+	s := newTestPostgresStore(t)
+	ctx := context.Background()
+
+	run := &gorkflow.WorkflowRun{
+		RunID: "pg-binary-run", WorkflowID: "wf-1",
+		Status: gorkflow.RunStatusRunning, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+	require.NoError(t, s.CreateRun(ctx, run))
+
+	// Verify BYTEA handles arbitrary binary data including null bytes.
+	binary := []byte("binary data \x00\x01\x02\xff\xfe")
+	require.NoError(t, s.SaveStepOutput(ctx, "pg-binary-run", "step-bin", binary))
+
+	got, err := s.LoadStepOutput(ctx, "pg-binary-run", "step-bin")
+	require.NoError(t, err)
+	assert.Equal(t, binary, got)
+}
+
 func TestPostgres_LoadStepOutput_NotFound(t *testing.T) {
 	s := newTestPostgresStore(t)
 	_, err := s.LoadStepOutput(context.Background(), "no-run", "no-step")
@@ -196,9 +303,39 @@ func TestPostgres_State_SetGetDelete(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []byte(`"value1"`), got)
 
+	// Upsert
+	require.NoError(t, s.SaveState(ctx, "pg-state-run", "key1", []byte(`"updated"`)))
+	got, err = s.LoadState(ctx, "pg-state-run", "key1")
+	require.NoError(t, err)
+	assert.Equal(t, []byte(`"updated"`), got)
+
 	require.NoError(t, s.DeleteState(ctx, "pg-state-run", "key1"))
 	_, err = s.LoadState(ctx, "pg-state-run", "key1")
 	assert.ErrorIs(t, err, gorkflow.ErrStateNotFound)
+}
+
+func TestPostgres_LoadState_NotFound(t *testing.T) {
+	s := newTestPostgresStore(t)
+	_, err := s.LoadState(context.Background(), "no-run", "no-key")
+	assert.ErrorIs(t, err, gorkflow.ErrStateNotFound)
+}
+
+func TestPostgres_State_Binary(t *testing.T) {
+	s := newTestPostgresStore(t)
+	ctx := context.Background()
+
+	run := &gorkflow.WorkflowRun{
+		RunID: "pg-state-bin-run", WorkflowID: "wf-1",
+		Status: gorkflow.RunStatusRunning, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+	require.NoError(t, s.CreateRun(ctx, run))
+
+	binary := []byte("state binary \x00\x01\x02\xff")
+	require.NoError(t, s.SaveState(ctx, "pg-state-bin-run", "bin-key", binary))
+
+	got, err := s.LoadState(ctx, "pg-state-bin-run", "bin-key")
+	require.NoError(t, err)
+	assert.Equal(t, binary, got)
 }
 
 func TestPostgres_State_GetAll(t *testing.T) {
@@ -226,8 +363,11 @@ func TestPostgres_Schema_Idempotent(t *testing.T) {
 	if dsn == "" {
 		t.Skip("set GORKFLOW_TEST_POSTGRES_DSN to run PostgreSQL store tests")
 	}
-	// Opening a second store against the same DSN re-runs initSchema — must not error.
+	// Opening a second store re-runs initSchema — must not error.
 	s, err := store.NewPostgresStore(dsn)
 	require.NoError(t, err)
 	s.Close()
 }
+
+// statusPtr is a helper to take the address of a RunStatus value.
+func statusPtr(s gorkflow.RunStatus) *gorkflow.RunStatus { return &s }

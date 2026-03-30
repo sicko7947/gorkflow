@@ -13,6 +13,9 @@ import (
 	workflow "github.com/sicko7947/gorkflow"
 )
 
+// Compile-time interface compliance check.
+var _ workflow.WorkflowStore = (*PostgresStore)(nil)
+
 // PostgresStoreOptions configures the PostgreSQL store.
 type PostgresStoreOptions struct {
 	MaxConns        int32
@@ -78,10 +81,12 @@ func NewPostgresStoreWithOptions(dsn string, opts PostgresStoreOptions) (*Postgr
 }
 
 // initSchema creates tables and indexes inside a single transaction.
+// The entire schema string is passed as one statement so it is never fragmented
+// by semicolon-splitting (which would break on comments, string literals, or DO blocks).
 func (s *PostgresStore) initSchema(ctx context.Context) error {
 	conn, err := s.pool.Acquire(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to acquire connection: %w", err)
+		return fmt.Errorf("failed to acquire connection for schema init: %w", err)
 	}
 	defer conn.Release()
 
@@ -91,21 +96,18 @@ func (s *PostgresStore) initSchema(ctx context.Context) error {
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	for _, stmt := range strings.Split(GetPostgresSchema(), ";") {
-		stmt = strings.TrimSpace(stmt)
-		if stmt == "" {
-			continue
-		}
-		if _, err := tx.Exec(ctx, stmt); err != nil {
-			return fmt.Errorf("failed to init schema: %w", err)
-		}
+	schema := GetPostgresSchema()
+	if _, err := tx.Exec(ctx, schema); err != nil {
+		return fmt.Errorf("failed to init schema: %w", err)
 	}
 	return tx.Commit(ctx)
 }
 
-// Close closes the underlying connection pool.
-func (s *PostgresStore) Close() {
+// Close closes the underlying connection pool. Always returns nil;
+// present to match the error-returning convention of other stores.
+func (s *PostgresStore) Close() error {
 	s.pool.Close()
+	return nil
 }
 
 // --- Workflow Runs ---
@@ -158,7 +160,7 @@ func (s *PostgresStore) UpdateRun(ctx context.Context, run *workflow.WorkflowRun
 		return fmt.Errorf("failed to marshal run: %w", err)
 	}
 
-	_, err = s.pool.Exec(ctx, `
+	tag, err := s.pool.Exec(ctx, `
 		UPDATE workflow_runs
 		SET status = $1, updated_at = $2, data = $3
 		WHERE run_id = $4`,
@@ -169,6 +171,9 @@ func (s *PostgresStore) UpdateRun(ctx context.Context, run *workflow.WorkflowRun
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update run: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return workflow.ErrRunNotFound
 	}
 	return nil
 }
@@ -288,7 +293,7 @@ func (s *PostgresStore) UpdateStepExecution(ctx context.Context, exec *workflow.
 		errMsg = &msg
 	}
 
-	_, err = s.pool.Exec(ctx, `
+	tag, err := s.pool.Exec(ctx, `
 		UPDATE step_executions
 		SET status = $1, started_at = $2, completed_at = $3, error = $4, data = $5
 		WHERE run_id = $6 AND step_id = $7`,
@@ -302,6 +307,9 @@ func (s *PostgresStore) UpdateStepExecution(ctx context.Context, exec *workflow.
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update step execution: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return workflow.ErrStepExecutionNotFound
 	}
 	return nil
 }
@@ -367,9 +375,9 @@ func (s *PostgresStore) LoadStepOutput(ctx context.Context, runID, stepID string
 func (s *PostgresStore) SaveState(ctx context.Context, runID, key string, value []byte) error {
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO workflow_state (run_id, key, value, updated_at)
-		VALUES ($1, $2, $3, NOW())
-		ON CONFLICT (run_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-		runID, key, value,
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (run_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`,
+		runID, key, value, time.Now().UTC(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to save state: %w", err)
