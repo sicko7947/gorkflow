@@ -2,6 +2,7 @@ package gorkflow
 
 import (
 	"fmt"
+	"sync"
 )
 
 // NodeType defines the type of graph node
@@ -22,15 +23,17 @@ func (n NodeType) String() string {
 type ExecutionGraph struct {
 	EntryPoint string
 	Nodes      map[string]*GraphNode
+	cacheMu    sync.RWMutex
+	sortCache  []string
+	levelCache [][]string
 }
 
 // GraphNode represents a node in the execution graph
 type GraphNode struct {
-	StepID     string
-	Type       NodeType
-	Next       []string
-	Previous   []string
-	Conditions []Condition
+	StepID   string
+	Type     NodeType
+	Next     []string
+	Previous []string
 }
 
 // NewExecutionGraph creates a new execution graph
@@ -44,11 +47,10 @@ func NewExecutionGraph() *ExecutionGraph {
 func (g *ExecutionGraph) AddNode(stepID string, nodeType NodeType) {
 	if _, exists := g.Nodes[stepID]; !exists {
 		g.Nodes[stepID] = &GraphNode{
-			StepID:     stepID,
-			Type:       nodeType,
-			Next:       []string{},
-			Previous:   []string{},
-			Conditions: []Condition{},
+			StepID:   stepID,
+			Type:     nodeType,
+			Next:     []string{},
+			Previous: []string{},
 		}
 	}
 
@@ -56,6 +58,9 @@ func (g *ExecutionGraph) AddNode(stepID string, nodeType NodeType) {
 	if g.EntryPoint == "" {
 		g.EntryPoint = stepID
 	}
+
+	g.sortCache = nil
+	g.levelCache = nil
 }
 
 // UpdateNodeType updates the type of an existing node
@@ -65,6 +70,8 @@ func (g *ExecutionGraph) UpdateNodeType(stepID string, nodeType NodeType) error 
 		return fmt.Errorf("node %s not found", stepID)
 	}
 	node.Type = nodeType
+	g.sortCache = nil
+	g.levelCache = nil
 	return nil
 }
 
@@ -86,6 +93,8 @@ func (g *ExecutionGraph) AddEdge(fromStepID, toStepID string) error {
 	toNode := g.Nodes[toStepID]
 	toNode.Previous = append(toNode.Previous, fromStepID)
 
+	g.sortCache = nil
+	g.levelCache = nil
 	return nil
 }
 
@@ -95,6 +104,8 @@ func (g *ExecutionGraph) SetEntryPoint(stepID string) error {
 		return fmt.Errorf("step %s not found in graph", stepID)
 	}
 	g.EntryPoint = stepID
+	g.sortCache = nil
+	g.levelCache = nil
 	return nil
 }
 
@@ -170,6 +181,14 @@ func (g *ExecutionGraph) dfsReachable(nodeID string, reachable map[string]bool) 
 
 // TopologicalSort returns nodes in topological order
 func (g *ExecutionGraph) TopologicalSort() ([]string, error) {
+	g.cacheMu.RLock()
+	if g.sortCache != nil {
+		cached := g.sortCache
+		g.cacheMu.RUnlock()
+		return cached, nil
+	}
+	g.cacheMu.RUnlock()
+
 	// Check if graph is valid
 	if err := g.Validate(); err != nil {
 		return nil, err
@@ -203,7 +222,52 @@ func (g *ExecutionGraph) TopologicalSort() ([]string, error) {
 		return nil, err
 	}
 
+	g.cacheMu.Lock()
+	g.sortCache = stack
+	g.cacheMu.Unlock()
 	return stack, nil
+}
+
+// ComputeLevels groups steps into execution levels via BFS.
+// Steps at the same level can execute concurrently.
+func (g *ExecutionGraph) ComputeLevels() ([][]string, error) {
+	g.cacheMu.RLock()
+	if g.levelCache != nil {
+		cached := g.levelCache
+		g.cacheMu.RUnlock()
+		return cached, nil
+	}
+	g.cacheMu.RUnlock()
+
+	if err := g.Validate(); err != nil {
+		return nil, err
+	}
+	levels := map[string]int{g.EntryPoint: 0}
+	queue := []string{g.EntryPoint}
+	maxLevel := 0
+	for len(queue) > 0 {
+		nodeID := queue[0]
+		queue = queue[1:]
+		node := g.Nodes[nodeID]
+		for _, next := range node.Next {
+			l := levels[nodeID] + 1
+			if existing, ok := levels[next]; !ok || l > existing {
+				levels[next] = l
+				if l > maxLevel {
+					maxLevel = l
+				}
+			}
+			queue = append(queue, next)
+		}
+	}
+	result := make([][]string, maxLevel+1)
+	for nodeID, l := range levels {
+		result[l] = append(result[l], nodeID)
+	}
+	g.cacheMu.Lock()
+	g.levelCache = result
+	g.cacheMu.Unlock()
+	return result, nil
 }
 
 // GetNextSteps returns the next steps to execute after the given step
@@ -247,7 +311,6 @@ func (g *ExecutionGraph) Clone() *ExecutionGraph {
 			Type:     node.Type,
 			Next:     append([]string{}, node.Next...),
 			Previous: append([]string{}, node.Previous...),
-			// Note: Conditions are not cloned as they're functions
 		}
 	}
 

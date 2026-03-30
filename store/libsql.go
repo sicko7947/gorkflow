@@ -192,56 +192,6 @@ func (s *LibSQLStore) UpdateRun(ctx context.Context, run *workflow.WorkflowRun) 
 	return nil
 }
 
-func (s *LibSQLStore) UpdateRunStatus(ctx context.Context, runID string, status workflow.RunStatus, werr *workflow.WorkflowError) error {
-	now := time.Now()
-
-	if werr != nil {
-		werrJSON, err := json.Marshal(werr)
-		if err != nil {
-			return fmt.Errorf("failed to marshal error: %w", err)
-		}
-
-		query := `
-			UPDATE workflow_runs 
-			SET status = ?, 
-			    updated_at = ?, 
-			    data = json_set(data, '$.status', ?, '$.updatedAt', ?, '$.error', json(?))
-			WHERE run_id = ?
-		`
-		_, err = s.db.ExecContext(ctx, query,
-			string(status),
-			now,
-			string(status),
-			now.Format(time.RFC3339Nano),
-			string(werrJSON),
-			runID,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to update run status with error: %w", err)
-		}
-	} else {
-		query := `
-			UPDATE workflow_runs 
-			SET status = ?, 
-			    updated_at = ?, 
-			    data = json_set(data, '$.status', ?, '$.updatedAt', ?)
-			WHERE run_id = ?
-		`
-		_, err := s.db.ExecContext(ctx, query,
-			string(status),
-			now,
-			string(status),
-			now.Format(time.RFC3339Nano),
-			runID,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to update run status: %w", err)
-		}
-	}
-
-	return nil
-}
-
 func (s *LibSQLStore) ListRuns(ctx context.Context, filter workflow.RunFilter) ([]*workflow.WorkflowRun, error) {
 	var queryBuilder strings.Builder
 	var args []any
@@ -274,7 +224,7 @@ func (s *LibSQLStore) ListRuns(ctx context.Context, filter workflow.RunFilter) (
 	}
 	defer rows.Close()
 
-	var runs []*workflow.WorkflowRun
+	runs := make([]*workflow.WorkflowRun, 0, 16)
 	for rows.Next() {
 		var data []byte
 		if err := rows.Scan(&data); err != nil {
@@ -411,7 +361,7 @@ func (s *LibSQLStore) ListStepExecutions(ctx context.Context, runID string) ([]*
 	}
 	defer rows.Close()
 
-	var execs []*workflow.StepExecution
+	execs := make([]*workflow.StepExecution, 0, 16)
 	for rows.Next() {
 		var data []byte
 		if err := rows.Scan(&data); err != nil {
@@ -518,12 +468,3 @@ func (s *LibSQLStore) GetAllState(ctx context.Context, runID string) (map[string
 	return state, nil
 }
 
-func (s *LibSQLStore) CountRunsByStatus(ctx context.Context, resourceID string, status workflow.RunStatus) (int, error) {
-	query := `SELECT COUNT(*) FROM workflow_runs WHERE resource_id = ? AND status = ?`
-	var count int
-	err := s.db.QueryRowContext(ctx, query, resourceID, string(status)).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count runs: %w", err)
-	}
-	return count, nil
-}

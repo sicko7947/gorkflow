@@ -16,8 +16,7 @@ type ExecutionConfig struct {
 	MaxConcurrency int `json:"max_concurrency,omitempty"`
 
 	// Failure behavior
-	ContinueOnError bool    `json:"continue_on_error,omitempty"`
-	FallbackStepID  *string `json:"fallback_step_id,omitempty"`
+	ContinueOnError bool `json:"continue_on_error,omitempty"`
 }
 
 // BackoffStrategy defines retry backoff behavior

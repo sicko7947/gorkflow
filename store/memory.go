@@ -136,37 +136,11 @@ func (s *MemoryStore) UpdateRun(ctx context.Context, run *gorkflow.WorkflowRun) 
 	return nil
 }
 
-func (s *MemoryStore) UpdateRunStatus(ctx context.Context, runID string, status gorkflow.RunStatus, err *gorkflow.WorkflowError) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	run, exists := s.runs[runID]
-	if !exists {
-		return gorkflow.ErrRunNotFound
-	}
-
-	run.Status = status
-	if err != nil {
-		errCopy := *err
-		if err.Details != nil {
-			errCopy.Details = make(map[string]any, len(err.Details))
-			for k, v := range err.Details {
-				errCopy.Details[k] = v
-			}
-		}
-		run.Error = &errCopy
-	} else {
-		run.Error = nil
-	}
-
-	return nil
-}
-
 func (s *MemoryStore) ListRuns(ctx context.Context, filter gorkflow.RunFilter) ([]*gorkflow.WorkflowRun, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	var runs []*gorkflow.WorkflowRun
+	runs := make([]*gorkflow.WorkflowRun, 0, len(s.runs))
 
 	for _, run := range s.runs {
 		// Apply filters
@@ -370,18 +344,3 @@ func (s *MemoryStore) GetAllState(ctx context.Context, runID string) (map[string
 	return stateCopy, nil
 }
 
-// Query operations
-
-func (s *MemoryStore) CountRunsByStatus(ctx context.Context, resourceID string, status gorkflow.RunStatus) (int, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	count := 0
-	for _, run := range s.runs {
-		if run.ResourceID == resourceID && run.Status == status {
-			count++
-		}
-	}
-
-	return count, nil
-}

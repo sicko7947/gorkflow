@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,9 +16,11 @@ import (
 
 // Engine orchestrates workflow execution
 type Engine struct {
-	store  gorkflow.WorkflowStore
-	logger zerolog.Logger
-	config gorkflow.EngineConfig
+	store      gorkflow.WorkflowStore
+	logger     zerolog.Logger
+	config     gorkflow.EngineConfig
+	activeRuns map[string]context.CancelFunc
+	runsMu     sync.Mutex
 }
 
 // NewEngine creates a new workflow engine
@@ -49,9 +53,10 @@ func NewEngine(store gorkflow.WorkflowStore, opts ...EngineOption) *Engine {
 		Level(zerolog.InfoLevel)
 
 	eng := &Engine{
-		store:  store,
-		logger: defaultLogger,
-		config: gorkflow.DefaultEngineConfig,
+		store:      store,
+		logger:     defaultLogger,
+		config:     gorkflow.DefaultEngineConfig,
+		activeRuns: make(map[string]context.CancelFunc),
 	}
 
 	// Apply options
@@ -118,7 +123,19 @@ func (e *Engine) StartWorkflow(
 
 	// Launch execution in background
 	if !options.Synchronous {
-		go e.executeWorkflow(context.Background(), wf, run)
+		bgCtx, cancel := context.WithCancel(context.Background())
+		e.runsMu.Lock()
+		e.activeRuns[runID] = cancel
+		e.runsMu.Unlock()
+		go func() {
+			defer func() {
+				e.runsMu.Lock()
+				delete(e.activeRuns, runID)
+				e.runsMu.Unlock()
+				cancel()
+			}()
+			e.executeWorkflow(bgCtx, wf, run)
+		}()
 	} else {
 		return runID, e.executeWorkflow(ctx, wf, run)
 	}
@@ -143,28 +160,26 @@ func (e *Engine) executeWorkflow(ctx context.Context, wf *gorkflow.Workflow, run
 		return err
 	}
 
-	// Build execution context - create accessors for state and outputs
-	outputs := gorkflow.NewStepAccessor(run.RunID, e.store)
+	// Build execution context - create shared state accessor
 	state := gorkflow.NewStateAccessor(run.RunID, e.store)
 
-	// Get execution order from graph
+	// Get execution levels (groups of steps that can run concurrently)
 	graph := wf.Graph()
-	executionOrder, err := graph.TopologicalSort()
+	levels, err := graph.ComputeLevels()
 	if err != nil {
-		workflowLogger.Error().Err(err).Msg("Failed to get execution order")
+		workflowLogger.Error().Err(err).Msg("Failed to compute execution levels")
 		return e.failWorkflow(ctx, run, err)
 	}
 
-	workflowLogger.Debug().
-		Strs("execution_order", executionOrder).
-		Msg("Execution order determined")
+	totalSteps := 0
+	for _, level := range levels {
+		totalSteps += len(level)
+	}
 
-	totalSteps := len(executionOrder)
-	completedSteps := 0
+	var completedSteps int64 // atomic counter
 
-	// Execute steps in order
-	for _, stepID := range executionOrder {
-		// Check for cancellation
+	for _, level := range levels {
+		// Check for cancellation before each level
 		select {
 		case <-ctx.Done():
 			gorkflow.LogWorkflowCancelled(e.logger, run.RunID)
@@ -172,102 +187,149 @@ func (e *Engine) executeWorkflow(ctx context.Context, wf *gorkflow.Workflow, run
 		default:
 		}
 
-		// Get step
-		step, err := wf.GetStep(stepID)
-		if err != nil {
-			workflowLogger.Error().Err(err).Str("step_id", stepID).Msg("Step not found")
-			return e.failWorkflow(ctx, run, err)
-		}
-
-		gorkflow.LogStepStarted(e.logger, run.RunID, stepID, step.GetName(), completedSteps+1, totalSteps)
-
-		// Prepare input for this step
-		var stepInput []byte
-		if completedSteps == 0 {
-			// First step gets workflow input
-			stepInput = run.Input
-		} else {
-			// Subsequent steps: get output from previous step
-			// Resolve dependencies from the graph to support parallel execution
-			prevSteps, err := wf.Graph().GetPreviousSteps(stepID)
+		if len(level) == 1 {
+			// Single step — sequential path
+			stepID := level[0]
+			step, err := wf.GetStep(stepID)
 			if err != nil {
-				workflowLogger.Error().Err(err).Str("step_id", stepID).Msg("Failed to resolve previous steps")
 				return e.failWorkflow(ctx, run, err)
 			}
 
-			// If step has parents, use direct parent output
-			// Note: Currently we only support single input, so we take the first parent's output.
-			// This correctly handles:
-			// 1. Linear chains (A -> B): B gets A's output
-			// 2. Parallel fan-out (A -> [B, C]): B gets A's output, C gets A's output
-			// It does NOT yet support aggregating inputs from multiple parents.
-			if len(prevSteps) > 0 {
-				prevStepID := prevSteps[0]
-				var err error
-				stepInput, err = e.store.LoadStepOutput(ctx, run.RunID, prevStepID)
-				if err != nil {
-					// Check if previous step had ContinueOnError set
-					prevStep, stepErr := wf.GetStep(prevStepID)
-					if stepErr == nil && prevStep.GetConfig().ContinueOnError {
-						workflowLogger.Warn().
-							Str("prev_step_id", prevStepID).
-							Msg("Previous step output not found, but ContinueOnError is true. Passing empty input.")
-						// Pass JSON null so unmarshaling works (results in zero value)
-						stepInput = []byte("null")
-					} else {
-						workflowLogger.Error().
-							Err(err).
-							Str("prev_step_id", prevStepID).
-							Msg("Failed to load output from previous step")
-						return e.failWorkflow(ctx, run, err)
-					}
+			stepInput, err := e.resolveStepInput(ctx, run, wf, stepID, atomic.LoadInt64(&completedSteps) == 0)
+			if err != nil {
+				return e.failWorkflow(ctx, run, err)
+			}
+
+			gorkflow.LogStepStarted(e.logger, run.RunID, stepID, step.GetName(), int(atomic.LoadInt64(&completedSteps))+1, totalSteps)
+
+			result, err := e.executeStep(ctx, run, step, stepInput, state, wf.GetContext(), int(atomic.LoadInt64(&completedSteps)))
+			if err != nil {
+				if ctx.Err() != nil {
+					gorkflow.LogWorkflowCancelled(e.logger, run.RunID)
+					return e.cancelWorkflow(ctx, run)
 				}
-			} else {
-				// No parents found (should technically be unreachable for non-entry nodes in valid graph)
-				workflowLogger.Warn().Str("step_id", stepID).Msg("Step has no parents but is not the first executed step")
+				if step.GetConfig().ContinueOnError {
+					workflowLogger.Warn().Err(err).Str("step_id", stepID).Msg("Step failed but continuing")
+				} else {
+					return e.failWorkflow(ctx, run, err)
+				}
+			}
+
+			if result != nil && result.Status == gorkflow.StepStatusCompleted {
+				run.Output = result.Output
+			}
+
+			atomic.AddInt64(&completedSteps, 1)
+			progress := float64(atomic.LoadInt64(&completedSteps)) / float64(totalSteps)
+			run.Progress = progress
+			run.UpdatedAt = time.Now()
+			// Progress update is best-effort; a failure here doesn't stop execution.
+			if err := e.store.UpdateRun(ctx, run); err != nil {
+				gorkflow.LogPersistenceError(e.logger, run.RunID, "update_run_progress", err)
+			}
+			gorkflow.LogWorkflowProgress(e.logger, run.RunID, progress)
+
+		} else {
+			// Multiple steps in this level — run concurrently
+			type stepResult struct {
+				stepID string
+				result *StepExecutionResult
+				err    error
+			}
+			resultsCh := make(chan stepResult, len(level))
+
+			maxConcurrency := gorkflow.DefaultExecutionConfig.MaxConcurrency
+			if maxConcurrency <= 0 {
+				maxConcurrency = len(level)
+			}
+			sem := make(chan struct{}, maxConcurrency)
+
+			for _, stepID := range level {
+				step, err := wf.GetStep(stepID)
+				if err != nil {
+					resultsCh <- stepResult{stepID: stepID, err: err}
+					continue
+				}
+
+				stepInput, err := e.resolveStepInput(ctx, run, wf, stepID, false)
+				if err != nil {
+					resultsCh <- stepResult{stepID: stepID, err: err}
+					continue
+				}
+
+				execIndex := int(atomic.LoadInt64(&completedSteps))
+				go func(sID string, s gorkflow.StepExecutor, input []byte, idx int) {
+					sem <- struct{}{}
+					defer func() { <-sem }()
+
+					gorkflow.LogStepStarted(e.logger, run.RunID, sID, s.GetName(), idx+1, totalSteps)
+					result, err := e.executeStep(ctx, run, s, input, state, wf.GetContext(), idx)
+					resultsCh <- stepResult{stepID: sID, result: result, err: err}
+				}(stepID, step, stepInput, execIndex)
+			}
+
+			// Collect all results
+			var fatalErr error
+			for range level {
+				r := <-resultsCh
+				if r.err != nil {
+					step, _ := wf.GetStep(r.stepID)
+					if step != nil && step.GetConfig().ContinueOnError {
+						workflowLogger.Warn().Err(r.err).Str("step_id", r.stepID).Msg("Parallel step failed but continuing")
+					} else if fatalErr == nil {
+						fatalErr = r.err
+					}
+				} else if r.result != nil && r.result.Status == gorkflow.StepStatusCompleted {
+					run.Output = r.result.Output
+				}
+
+				atomic.AddInt64(&completedSteps, 1)
+				progress := float64(atomic.LoadInt64(&completedSteps)) / float64(totalSteps)
+				run.Progress = progress
+				run.UpdatedAt = time.Now()
+				// Progress update is best-effort; a failure here doesn't stop execution.
+				if err := e.store.UpdateRun(ctx, run); err != nil {
+					gorkflow.LogPersistenceError(e.logger, run.RunID, "update_run_progress", err)
+				}
+				gorkflow.LogWorkflowProgress(e.logger, run.RunID, progress)
+			}
+
+			if fatalErr != nil {
+				if ctx.Err() != nil {
+					gorkflow.LogWorkflowCancelled(e.logger, run.RunID)
+					return e.cancelWorkflow(ctx, run)
+				}
+				return e.failWorkflow(ctx, run, fatalErr)
 			}
 		}
-
-		// Execute step
-		result, err := e.executeStep(ctx, run, step, stepInput, outputs, state, wf.GetContext(), completedSteps)
-		if err != nil {
-			// Check if we should continue on error
-			if step.GetConfig().ContinueOnError {
-				workflowLogger.Warn().
-					Err(err).
-					Str("step_id", stepID).
-					Msg("Step failed but continuing due to ContinueOnError")
-			} else {
-				workflowLogger.Error().
-					Err(err).
-					Str("step_id", stepID).
-					Msg("Step failed, stopping workflow")
-				return e.failWorkflow(ctx, run, err)
-			}
-		}
-
-		// Update workflow output if step completed successfully
-		// If step was skipped (and didn't provide a default/pass-through), we keep the previous output
-		if result != nil && result.Status == gorkflow.StepStatusCompleted {
-			run.Output = result.Output
-		}
-
-		completedSteps++
-
-		// Update progress
-		progress := float64(completedSteps) / float64(totalSteps)
-		run.Progress = progress
-		run.UpdatedAt = time.Now()
-
-		if err := e.store.UpdateRun(ctx, run); err != nil {
-			gorkflow.LogPersistenceError(e.logger, run.RunID, "update_run_progress", err)
-		}
-
-		gorkflow.LogWorkflowProgress(e.logger, run.RunID, progress)
 	}
 
 	// All steps completed successfully
 	return e.completeWorkflow(ctx, run)
+}
+
+// resolveStepInput determines what input a step should receive
+func (e *Engine) resolveStepInput(ctx context.Context, run *gorkflow.WorkflowRun, wf *gorkflow.Workflow, stepID string, isFirst bool) ([]byte, error) {
+	if isFirst {
+		return run.Input, nil
+	}
+	prevSteps, err := wf.Graph().GetPreviousSteps(stepID)
+	if err != nil {
+		return nil, err
+	}
+	if len(prevSteps) == 0 {
+		return run.Input, nil
+	}
+	prevStepID := prevSteps[0]
+	input, err := e.store.LoadStepOutput(ctx, run.RunID, prevStepID)
+	if err != nil {
+		prevStep, stepErr := wf.GetStep(prevStepID)
+		if stepErr == nil && prevStep.GetConfig().ContinueOnError {
+			return []byte("null"), nil
+		}
+		return nil, err
+	}
+	return input, nil
 }
 
 // completeWorkflow marks workflow as completed
@@ -335,17 +397,31 @@ func (e *Engine) GetStepExecutions(ctx context.Context, runID string) ([]*gorkfl
 	return e.store.ListStepExecutions(ctx, runID)
 }
 
-// Cancel cancels a running workflow
+// Cancel cancels a running workflow.
+// If an async goroutine is active, signals it and returns immediately — the goroutine
+// handles the DB update via its ctx.Done() path, avoiding a double-update.
+// If no goroutine is active (sync execution, already finished), updates DB directly.
 func (e *Engine) Cancel(ctx context.Context, runID string) error {
+	e.runsMu.Lock()
+	cancelFn, hasActive := e.activeRuns[runID]
+	if hasActive {
+		cancelFn()
+	}
+	e.runsMu.Unlock()
+
+	if hasActive {
+		// The goroutine's ctx.Done() path calls cancelWorkflow — don't double-update.
+		return nil
+	}
+
+	// No active goroutine: update DB directly.
 	run, err := e.store.GetRun(ctx, runID)
 	if err != nil {
 		return fmt.Errorf("failed to get run: %w", err)
 	}
-
 	if run.Status.IsTerminal() {
 		return fmt.Errorf("cannot cancel workflow in %s state", run.Status)
 	}
-
 	return e.cancelWorkflow(ctx, run)
 }
 

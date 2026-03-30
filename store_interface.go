@@ -8,7 +8,6 @@ type WorkflowStore interface {
 	CreateRun(ctx context.Context, run *WorkflowRun) error
 	GetRun(ctx context.Context, runID string) (*WorkflowRun, error)
 	UpdateRun(ctx context.Context, run *WorkflowRun) error
-	UpdateRunStatus(ctx context.Context, runID string, status RunStatus, err *WorkflowError) error
 	ListRuns(ctx context.Context, filter RunFilter) ([]*WorkflowRun, error)
 
 	// Step executions
@@ -27,8 +26,6 @@ type WorkflowStore interface {
 	DeleteState(ctx context.Context, runID, key string) error
 	GetAllState(ctx context.Context, runID string) (map[string][]byte, error)
 
-	// Queries
-	CountRunsByStatus(ctx context.Context, resourceID string, status RunStatus) (int, error)
 }
 
 // RunFilter defines filtering criteria for workflow runs

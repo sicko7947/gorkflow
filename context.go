@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/rs/zerolog"
 )
@@ -104,6 +105,7 @@ func GetTyped[T any](accessor StateAccessor, key string) (T, error) {
 type stepAccessor struct {
 	runID       string
 	store       WorkflowStore
+	ctx         context.Context
 	outputCache map[string][]byte
 	inputCache  map[string][]byte
 }
@@ -113,6 +115,7 @@ func newStepAccessor(runID string, wfStore WorkflowStore) StepDataAccessor {
 	return &stepAccessor{
 		runID:       runID,
 		store:       wfStore,
+		ctx:         context.Background(),
 		outputCache: make(map[string][]byte),
 		inputCache:  make(map[string][]byte),
 	}
@@ -130,7 +133,7 @@ func (a *stepAccessor) GetOutput(stepID string, target interface{}) error {
 	}
 
 	// Load from store
-	data, err := a.store.LoadStepOutput(context.Background(), a.runID, stepID)
+	data, err := a.store.LoadStepOutput(a.ctx, a.runID, stepID)
 	if err != nil {
 		return fmt.Errorf("failed to load output for step %s: %w", stepID, err)
 	}
@@ -153,7 +156,7 @@ func (a *stepAccessor) HasOutput(stepID string) bool {
 	}
 
 	// Check store
-	_, err := a.store.LoadStepOutput(context.Background(), a.runID, stepID)
+	_, err := a.store.LoadStepOutput(a.ctx, a.runID, stepID)
 	return err == nil
 }
 
@@ -164,7 +167,7 @@ func (a *stepAccessor) GetInput(stepID string, target interface{}) error {
 	}
 
 	// Load step execution to get the input
-	exec, err := a.store.GetStepExecution(context.Background(), a.runID, stepID)
+	exec, err := a.store.GetStepExecution(a.ctx, a.runID, stepID)
 	if err != nil {
 		return fmt.Errorf("failed to load step execution for step %s: %w", stepID, err)
 	}
@@ -188,6 +191,8 @@ func (a *stepAccessor) GetInput(stepID string, target interface{}) error {
 type stateAccessor struct {
 	runID string
 	store WorkflowStore
+	ctx   context.Context
+	mu    sync.RWMutex
 	cache map[string][]byte
 }
 
@@ -196,6 +201,7 @@ func NewStateAccessor(runID string, wfStore WorkflowStore) StateAccessor {
 	return &stateAccessor{
 		runID: runID,
 		store: wfStore,
+		ctx:   context.Background(),
 		cache: make(map[string][]byte),
 	}
 }
@@ -207,11 +213,14 @@ func (a *stateAccessor) Set(key string, value interface{}) error {
 		return fmt.Errorf("failed to marshal state value for key %s: %w", key, err)
 	}
 
-	// Update cache
+	// Update cache and capture ctx under lock (ctx may be updated concurrently in parallel execution)
+	a.mu.Lock()
 	a.cache[key] = data
+	ctx := a.ctx
+	a.mu.Unlock()
 
 	// Persist to store
-	if err := a.store.SaveState(context.Background(), a.runID, key, data); err != nil {
+	if err := a.store.SaveState(ctx, a.runID, key, data); err != nil {
 		return fmt.Errorf("failed to save state for key %s: %w", key, err)
 	}
 
@@ -219,19 +228,25 @@ func (a *stateAccessor) Set(key string, value interface{}) error {
 }
 
 func (a *stateAccessor) Get(key string, target interface{}) error {
-	// Check cache first
-	if data, ok := a.cache[key]; ok {
+	// Check cache first, capturing ctx atomically
+	a.mu.RLock()
+	data, ok := a.cache[key]
+	ctx := a.ctx
+	a.mu.RUnlock()
+	if ok {
 		return json.Unmarshal(data, target)
 	}
 
 	// Load from store
-	data, err := a.store.LoadState(context.Background(), a.runID, key)
+	data, err := a.store.LoadState(ctx, a.runID, key)
 	if err != nil {
 		return fmt.Errorf("failed to load state for key %s: %w", key, err)
 	}
 
 	// Cache it
+	a.mu.Lock()
 	a.cache[key] = data
+	a.mu.Unlock()
 
 	// Unmarshal
 	if err := json.Unmarshal(data, target); err != nil {
@@ -242,11 +257,14 @@ func (a *stateAccessor) Get(key string, target interface{}) error {
 }
 
 func (a *stateAccessor) Delete(key string) error {
-	// Remove from cache
+	// Remove from cache and capture ctx under lock
+	a.mu.Lock()
 	delete(a.cache, key)
+	ctx := a.ctx
+	a.mu.Unlock()
 
 	// Delete from store
-	if err := a.store.DeleteState(context.Background(), a.runID, key); err != nil {
+	if err := a.store.DeleteState(ctx, a.runID, key); err != nil {
 		return fmt.Errorf("failed to delete state for key %s: %w", key, err)
 	}
 
@@ -254,27 +272,55 @@ func (a *stateAccessor) Delete(key string) error {
 }
 
 func (a *stateAccessor) Has(key string) bool {
-	// Check cache
-	if _, ok := a.cache[key]; ok {
+	// Check cache, capturing ctx atomically
+	a.mu.RLock()
+	_, ok := a.cache[key]
+	ctx := a.ctx
+	a.mu.RUnlock()
+	if ok {
 		return true
 	}
 
 	// Check store
-	_, err := a.store.LoadState(context.Background(), a.runID, key)
+	_, err := a.store.LoadState(ctx, a.runID, key)
 	return err == nil
 }
 
 func (a *stateAccessor) GetAll() (map[string][]byte, error) {
+	// Capture ctx under lock before store call
+	a.mu.RLock()
+	ctx := a.ctx
+	a.mu.RUnlock()
+
 	// Get all from store
-	data, err := a.store.GetAllState(context.Background(), a.runID)
+	data, err := a.store.GetAllState(ctx, a.runID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get all state: %w", err)
 	}
 
 	// Update cache
+	a.mu.Lock()
 	for k, v := range data {
 		a.cache[k] = v
 	}
+	a.mu.Unlock()
 
 	return data, nil
+}
+
+// SetStepAccessorCtx updates the context used by a StepDataAccessor for store calls.
+func SetStepAccessorCtx(accessor StepDataAccessor, ctx context.Context) {
+	if sa, ok := accessor.(*stepAccessor); ok {
+		sa.ctx = ctx
+	}
+}
+
+// SetStateAccessorCtx updates the context used by a StateAccessor for store calls.
+// Safe to call concurrently with other accessor methods.
+func SetStateAccessorCtx(accessor StateAccessor, ctx context.Context) {
+	if sa, ok := accessor.(*stateAccessor); ok {
+		sa.mu.Lock()
+		sa.ctx = ctx
+		sa.mu.Unlock()
+	}
 }

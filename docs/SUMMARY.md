@@ -60,6 +60,12 @@
 - [Debugging](troubleshooting/debugging.md)
 - [Performance](troubleshooting/performance.md)
 - [FAQ](troubleshooting/faq.md)
+- [Benchmark & Stress Test Results](troubleshooting/benchmark-results.md)
+
+## Migration
+
+- [v0.5 to v0.6](migration/v0.5-to-v0.6.md)
+- [v0.6 to v0.7](migration/v0.6-to-v0.7.md)
 
 ## Architecture
 

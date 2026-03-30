@@ -195,6 +195,18 @@ func (s *Step[TIn, TOut]) DisableValidation() {
 // Condition is a function that determines if a step should execute
 type Condition func(ctx *StepContext) (bool, error)
 
+// evalCondition evaluates a condition and logs if the step is skipped.
+func evalCondition(ctx *StepContext, cond Condition) (bool, error) {
+	shouldRun, err := cond(ctx)
+	if err != nil {
+		return false, fmt.Errorf("condition evaluation failed: %w", err)
+	}
+	if !shouldRun {
+		LogStepSkipped(ctx.Logger, ctx.RunID, ctx.StepID, "condition_not_met")
+	}
+	return shouldRun, nil
+}
+
 // ConditionalStep wraps a step with a condition
 type ConditionalStep[TIn, TOut any] struct {
 	Step      *Step[TIn, TOut]
@@ -233,15 +245,12 @@ func (cs *ConditionalStep[TIn, TOut]) OutputType() reflect.Type {
 }
 
 func (cs *ConditionalStep[TIn, TOut]) Execute(ctx *StepContext, inputBytes []byte) ([]byte, error) {
-	// Evaluate condition
-	shouldRun, err := cs.Condition(ctx)
+	shouldRun, err := evalCondition(ctx, cs.Condition)
 	if err != nil {
-		return nil, fmt.Errorf("condition evaluation failed: %w", err)
+		return nil, err
 	}
 
 	if !shouldRun {
-		LogStepSkipped(ctx.Logger, ctx.RunID, ctx.StepID, "condition_not_met")
-		// Step skipped - return default or zero value
 		if cs.Default != nil {
 			return json.Marshal(cs.Default)
 		}
@@ -311,15 +320,12 @@ func (w *conditionalStepWrapper) OutputType() reflect.Type {
 }
 
 func (w *conditionalStepWrapper) Execute(ctx *StepContext, inputBytes []byte) ([]byte, error) {
-	// Evaluate condition
-	shouldRun, err := w.condition(ctx)
+	shouldRun, err := evalCondition(ctx, w.condition)
 	if err != nil {
-		return nil, fmt.Errorf("condition evaluation failed: %w", err)
+		return nil, err
 	}
 
 	if !shouldRun {
-		LogStepSkipped(ctx.Logger, ctx.RunID, ctx.StepID, "condition_not_met")
-		// Step skipped - return default or zero value
 		if w.defaultValue != nil {
 			return json.Marshal(w.defaultValue)
 		}

@@ -16,7 +16,6 @@ func TestDefaultExecutionConfig(t *testing.T) {
 	assert.Equal(t, 30, config.TimeoutSeconds)
 	assert.Equal(t, 1, config.MaxConcurrency)
 	assert.False(t, config.ContinueOnError)
-	assert.Nil(t, config.FallbackStepID)
 }
 
 func TestWithRetries(t *testing.T) {
@@ -143,19 +142,6 @@ func TestExecutionConfig_CustomValues(t *testing.T) {
 	assert.Equal(t, 120, config.TimeoutSeconds)
 	assert.Equal(t, 5, config.MaxConcurrency)
 	assert.True(t, config.ContinueOnError)
-}
-
-func TestExecutionConfig_WithFallback(t *testing.T) {
-	fallbackStep := "fallback-step"
-	config := ExecutionConfig{
-		MaxRetries:      3,
-		TimeoutSeconds:  30,
-		FallbackStepID:  &fallbackStep,
-		ContinueOnError: true,
-	}
-
-	assert.NotNil(t, config.FallbackStepID)
-	assert.Equal(t, "fallback-step", *config.FallbackStepID)
 }
 
 func TestDefaultEngineConfig(t *testing.T) {

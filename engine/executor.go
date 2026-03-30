@@ -25,11 +25,11 @@ func (e *Engine) executeStep(
 	run *gorkflow.WorkflowRun,
 	step gorkflow.StepExecutor,
 	inputBytes []byte,
-	outputs gorkflow.StepDataAccessor,
 	state gorkflow.StateAccessor,
 	customContext any,
 	executionIndex int,
 ) (*StepExecutionResult, error) {
+	outputs := gorkflow.NewStepAccessor(run.RunID, e.store)
 	config := step.GetConfig()
 
 	// Create step execution record
@@ -68,6 +68,12 @@ func (e *Engine) executeStep(
 
 	// Retry loop
 	for attempt := 0; attempt <= config.MaxRetries; attempt++ {
+		// Short-circuit if the workflow context is already cancelled.
+		if ctx.Err() != nil {
+			lastErr = ctx.Err()
+			break
+		}
+
 		attemptsMade = attempt + 1
 		stepCtx.Attempt = attempt
 
@@ -86,7 +92,12 @@ func (e *Engine) executeStep(
 			}
 
 			if delay > 0 {
-				time.Sleep(delay)
+				select {
+				case <-ctx.Done():
+					lastErr = ctx.Err()
+					goto retryExhausted
+				case <-time.After(delay):
+				}
 			}
 		}
 
@@ -108,6 +119,8 @@ func (e *Engine) executeStep(
 		)
 
 		stepCtx.Context = execCtx
+		gorkflow.SetStepAccessorCtx(outputs, execCtx)
+		gorkflow.SetStateAccessorCtx(state, execCtx)
 		startTime := time.Now()
 
 		// Execute step (with panic recovery)
@@ -193,7 +206,8 @@ func (e *Engine) executeStep(
 		gorkflow.LogStepFailed(e.logger, run.RunID, step.GetID(), lastErr, attempt, duration.Milliseconds())
 	}
 
-	// All retries exhausted
+retryExhausted:
+	// All retries exhausted (or context cancelled)
 	stepExec.Status = gorkflow.StepStatusFailed
 	completedAt := time.Now()
 	stepExec.CompletedAt = &completedAt
