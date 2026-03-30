@@ -1,6 +1,6 @@
 # Benchmark & Stress Test Results
 
-Baseline results captured on 2026-03-30. Re-run after significant changes to track regressions.
+Baseline results captured on 2026-03-30, updated 2026-03-30 after correctness fixes. Re-run after significant changes to track regressions.
 
 **Environment:** linux/amd64, 32-core x86_64, Go 1.26.1
 
@@ -45,14 +45,16 @@ Package: `github.com/sicko7947/gorkflow`
 
 | Benchmark | ns/op | B/op | allocs/op |
 |-----------|------:|-----:|----------:|
-| `TopologicalSort_10Nodes` (cache hit) | 9.0 | 0 | 0 |
-| `TopologicalSort_10Nodes_Cold` | 9,608 | 4,977 | 93 |
+| `TopologicalSort_10Nodes` (cache hit) | 9.1 | 0 | 0 |
+| `TopologicalSort_10Nodes_Cold` | 9,157 | 4,448 | 79 |
 | `TopologicalSort_100Nodes` (cache hit) | 9.0 | 0 | 0 |
-| `ComputeLevels_FanOut_16` (cache hit) | 9.0 | 0 | 0 |
-| `ComputeLevels_FanOut_16_Cold` | 14,518 | 10,540 | 92 |
-| `Clone_10Nodes` | 1,713 | 1,544 | 31 |
+| `ComputeLevels_FanOut_16` (cache hit) | 9.2 | 0 | 0 |
+| `ComputeLevels_FanOut_16_Cold` | 14,882 | 10,540 | 92 |
+| `Clone_10Nodes` | 1,723 | 1,544 | 31 |
 
 Cache hits for `TopologicalSort` and `ComputeLevels` are effectively free (~9 ns) since the graph is immutable after build time.
+
+`TopologicalSort_Cold` allocation count dropped from 93 → 79 after switching from O(n²) slice prepend to append+reverse.
 
 ---
 
@@ -62,13 +64,15 @@ Package: `github.com/sicko7947/gorkflow/engine`
 
 | Benchmark | ns/op | B/op | allocs/op |
 |-----------|------:|-----:|----------:|
-| `Sequential_10Steps` | 1,101,452 | 34,873 | 300 |
-| `Sequential_100Steps` | 1,113,261 | 311,741 | 2,563 |
-| `Parallel_FanOut_4` | 39,323 | 18,583 | 161 |
-| `Parallel_FanOut_16` | 122,631 | 59,669 | 495 |
-| `StartWorkflow_Async` | 11,748 | 6,298 | 56 |
+| `Sequential_10Steps` | 1,093,750 | 35,033 | 340 |
+| `Sequential_100Steps` | 1,121,828 | 313,324 | 2,963 |
+| `Parallel_FanOut_4` | 35,651 | 17,890 | 169 |
+| `Parallel_FanOut_16` | 102,282 | 55,772 | 503 |
+| `StartWorkflow_Async` | 12,287 | 6,320 | 60 |
 
-`Parallel_FanOut_4` at ~39 µs vs `Sequential_10Steps` at ~1.1 ms: parallel fan-out is ~28× faster than an equivalent sequential chain for independent work.
+`Parallel_FanOut_4` at ~36 µs vs `Sequential_10Steps` at ~1.1 ms: parallel fan-out is ~30× faster than an equivalent sequential chain for independent work.
+
+These numbers reflect true concurrent goroutine execution after the semaphore bug fix (previously the semaphore was capped at 1, serialising all goroutines). With real I/O-bound steps the speedup is proportional to step duration × fan-out width.
 
 Async workflow startup overhead is ~12 µs (UUID generation + JSON marshal + store write).
 

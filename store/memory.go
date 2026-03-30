@@ -88,7 +88,14 @@ func deepCopyStepExecution(exec *gorkflow.StepExecution) *gorkflow.StepExecution
 		return nil
 	}
 	execCopy := *exec
-	// Note: exec.Error is an error interface, shallow copy is acceptable
+	if exec.Input != nil {
+		execCopy.Input = make([]byte, len(exec.Input))
+		copy(execCopy.Input, exec.Input)
+	}
+	if exec.Output != nil {
+		execCopy.Output = make([]byte, len(exec.Output))
+		copy(execCopy.Output, exec.Output)
+	}
 	return &execCopy
 }
 

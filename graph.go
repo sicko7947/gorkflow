@@ -213,13 +213,18 @@ func (g *ExecutionGraph) TopologicalSort() ([]string, error) {
 			}
 		}
 
-		stack = append([]string{nodeID}, stack...)
+		stack = append(stack, nodeID)
 		return nil
 	}
 
 	// Start from entry point
 	if err := visit(g.EntryPoint); err != nil {
 		return nil, err
+	}
+
+	// Reverse in-place: DFS post-order appends children-before-parent; reversing gives topological order.
+	for i, j := 0, len(stack)-1; i < j; i, j = i+1, j-1 {
+		stack[i], stack[j] = stack[j], stack[i]
 	}
 
 	g.cacheMu.Lock()
@@ -256,8 +261,8 @@ func (g *ExecutionGraph) ComputeLevels() ([][]string, error) {
 				if l > maxLevel {
 					maxLevel = l
 				}
+				queue = append(queue, next)
 			}
-			queue = append(queue, next)
 		}
 	}
 	result := make([][]string, maxLevel+1)

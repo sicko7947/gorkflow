@@ -210,7 +210,7 @@ wf, _ := gorkflow.NewWorkflow("multi-parallel", "Multi-Parallel").
     ThenStep(prepare).
     Parallel(group1StepA, group1StepB).  // First parallel group
     ThenStep(intermediate).
-    Parallel(group2StepA, group2StepB student_OFFSET2StepC).  // Second parallel group
+    Parallel(group2StepA, group2StepB, group2StepC).  // Second parallel group
     ThenStep(finalize).
     Build()
 ```

@@ -238,11 +238,7 @@ func (e *Engine) executeWorkflow(ctx context.Context, wf *gorkflow.Workflow, run
 			}
 			resultsCh := make(chan stepResult, len(level))
 
-			maxConcurrency := gorkflow.DefaultExecutionConfig.MaxConcurrency
-			if maxConcurrency <= 0 {
-				maxConcurrency = len(level)
-			}
-			sem := make(chan struct{}, maxConcurrency)
+			sem := make(chan struct{}, len(level))
 
 			for _, stepID := range level {
 				step, err := wf.GetStep(stepID)
@@ -282,17 +278,17 @@ func (e *Engine) executeWorkflow(ctx context.Context, wf *gorkflow.Workflow, run
 				} else if r.result != nil && r.result.Status == gorkflow.StepStatusCompleted {
 					run.Output = r.result.Output
 				}
-
 				atomic.AddInt64(&completedSteps, 1)
-				progress := float64(atomic.LoadInt64(&completedSteps)) / float64(totalSteps)
-				run.Progress = progress
-				run.UpdatedAt = time.Now()
-				// Progress update is best-effort; a failure here doesn't stop execution.
-				if err := e.store.UpdateRun(ctx, run); err != nil {
-					gorkflow.LogPersistenceError(e.logger, run.RunID, "update_run_progress", err)
-				}
-				gorkflow.LogWorkflowProgress(e.logger, run.RunID, progress)
 			}
+
+			// Single progress update after all steps in this level complete.
+			progress := float64(atomic.LoadInt64(&completedSteps)) / float64(totalSteps)
+			run.Progress = progress
+			run.UpdatedAt = time.Now()
+			if err := e.store.UpdateRun(ctx, run); err != nil {
+				gorkflow.LogPersistenceError(e.logger, run.RunID, "update_run_progress", err)
+			}
+			gorkflow.LogWorkflowProgress(e.logger, run.RunID, progress)
 
 			if fatalErr != nil {
 				if ctx.Err() != nil {

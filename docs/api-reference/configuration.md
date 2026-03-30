@@ -25,7 +25,7 @@ type ExecutionConfig struct {
 | `RetryDelayMs` | `int` | `1000` | Base delay between retries in milliseconds |
 | `RetryBackoff` | `BackoffStrategy` | `BackoffLinear` | Backoff strategy for retry delays |
 | `TimeoutSeconds` | `int` | `30` | Per-attempt timeout in seconds |
-| `MaxConcurrency` | `int` | `1` | Concurrency limit for parallel execution |
+| `MaxConcurrency` | `int` | `1` | Reserved — not currently used by the engine. Parallel steps within a level all run concurrently. |
 | `ContinueOnError` | `bool` | `false` | If `true`, workflow continues even if this step fails |
 
 ### DefaultExecutionConfig
