@@ -26,9 +26,10 @@ func newTestPostgresStore(t *testing.T) *store.PostgresStore {
 	if dsn == "" {
 		t.Skip("set GORKFLOW_TEST_POSTGRES_DSN to run PostgreSQL store tests")
 	}
-	truncatePostgresTables(t, dsn)
+	// Create the store first so initSchema runs and tables exist before truncation.
 	s, err := store.NewPostgresStore(dsn)
 	require.NoError(t, err)
+	truncatePostgresTables(t, dsn)
 	t.Cleanup(func() { s.Close() })
 	return s
 }
