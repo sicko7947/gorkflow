@@ -393,6 +393,13 @@ func (e *Engine) GetStepExecutions(ctx context.Context, runID string) ([]*gorkfl
 	return e.store.ListStepExecutions(ctx, runID)
 }
 
+// LoadStepOutput retrieves the output of a specific step execution.
+// Step outputs are stored separately from step execution metadata to avoid
+// loading potentially large payloads when listing all executions.
+func (e *Engine) LoadStepOutput(ctx context.Context, runID, stepID string) ([]byte, error) {
+	return e.store.LoadStepOutput(ctx, runID, stepID)
+}
+
 // Cancel cancels a running workflow.
 // If an async goroutine is active, signals it and returns immediately — the goroutine
 // handles the DB update via its ctx.Done() path, avoiding a double-update.
