@@ -35,11 +35,10 @@ func BenchmarkWorkflow_Sequential_10Steps(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		runID, err := eng.StartWorkflow(context.Background(), wf, nil)
+		_, err := eng.StartWorkflow(context.Background(), wf, nil, gorkflow.WithSynchronousExecution())
 		if err != nil {
 			b.Fatal(err)
 		}
-		waitForBenchCompletion(b, eng, runID)
 	}
 }
 
@@ -65,11 +64,10 @@ func BenchmarkWorkflow_Sequential_100Steps(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		runID, err := eng.StartWorkflow(context.Background(), wf, nil)
+		_, err := eng.StartWorkflow(context.Background(), wf, nil, gorkflow.WithSynchronousExecution())
 		if err != nil {
 			b.Fatal(err)
 		}
-		waitForBenchCompletion(b, eng, runID)
 	}
 }
 
@@ -139,6 +137,9 @@ func BenchmarkEngine_StartWorkflow_Async(b *testing.B) {
 	}
 }
 
+// MemoryStore retains runs for the duration of each benchmark because the store
+// interface has no deletion API. Long benchmark runs therefore include a growing
+// live heap; use the same iteration count when comparing implementations.
 func createBenchEngine(b *testing.B) (*engine.Engine, gorkflow.WorkflowStore) {
 	b.Helper()
 	wfStore := store.NewMemoryStore()
@@ -151,28 +152,4 @@ func createBenchEngine(b *testing.B) (*engine.Engine, gorkflow.WorkflowStore) {
 		}),
 	)
 	return eng, wfStore
-}
-
-func waitForBenchCompletion(b *testing.B, eng *engine.Engine, runID string) {
-	b.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	ticker := time.NewTicker(1 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			b.Fatal("Timeout waiting for workflow completion")
-		case <-ticker.C:
-			run, err := eng.GetRun(context.Background(), runID)
-			if err != nil {
-				b.Fatal(err)
-			}
-			if run.Status.IsTerminal() {
-				return
-			}
-		}
-	}
 }

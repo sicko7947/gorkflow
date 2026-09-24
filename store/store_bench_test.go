@@ -182,3 +182,25 @@ func newBenchLibSQLStore(b *testing.B) (gorkflow.WorkflowStore, func()) {
 	}
 	return s, cleanup
 }
+
+func BenchmarkMemoryStore_ListRuns_Limited(b *testing.B) {
+	s := store.NewMemoryStore()
+	ctx := context.Background()
+	payload := make([]byte, 4096)
+	for i := range 1000 {
+		if err := s.CreateRun(ctx, &gorkflow.WorkflowRun{
+			RunID: fmt.Sprintf("run-%d", i), WorkflowID: "bench-wf",
+			CreatedAt: time.Unix(int64(i), 0), Input: payload,
+			Tags: map[string]string{"source": "benchmark"},
+		}); err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := s.ListRuns(ctx, gorkflow.RunFilter{WorkflowID: "bench-wf", Limit: 10}); err != nil {
+			b.Fatal(err)
+		}
+	}
+}

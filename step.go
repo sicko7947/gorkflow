@@ -184,6 +184,10 @@ func (s *Step[TIn, TOut]) SetCustomValidator(v *validator.Validate) {
 			validateInput:  true,
 			validateOutput: true,
 		}
+	} else {
+		// The default configuration is shared; customize only this step.
+		config := *s.validationConfig
+		s.validationConfig = &config
 	}
 	s.validationConfig.validator = v
 }

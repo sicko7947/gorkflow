@@ -3,6 +3,7 @@ package gorkflow_test
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/sicko7947/gorkflow"
@@ -176,4 +177,146 @@ func TestGetRunContext_NoContext(t *testing.T) {
 	_, err = gorkflow.GetRunContext[TestRunContext](run)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no context")
+}
+
+// stateFailureStore checks that accessors propagate their own context and only
+// publish state after successful persistence.
+type stateFailureStore struct {
+	gorkflow.WorkflowStore
+	failSave   bool
+	failDelete bool
+}
+
+func (s *stateFailureStore) SaveState(ctx context.Context, runID, key string, value []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if s.failSave {
+		return fmt.Errorf("save failed")
+	}
+	return s.WorkflowStore.SaveState(ctx, runID, key, value)
+}
+
+func (s *stateFailureStore) DeleteState(ctx context.Context, runID, key string) error {
+	if s.failDelete {
+		return fmt.Errorf("delete failed")
+	}
+	return s.WorkflowStore.DeleteState(ctx, runID, key)
+}
+
+func TestStateAccessorFailedWritesPreserveCache(t *testing.T) {
+	s := &stateFailureStore{WorkflowStore: store.NewMemoryStore()}
+	a := gorkflow.NewStateAccessor("run", s)
+	require.NoError(t, a.Set("key", "original"))
+	s.failSave = true
+	require.Error(t, a.Set("key", "failed"))
+	value, err := gorkflow.GetTyped[string](a, "key")
+	require.NoError(t, err)
+	require.Equal(t, "original", value)
+	require.Error(t, a.Set("missing", "failed"))
+	require.False(t, a.Has("missing"))
+
+	s.failDelete = true
+	require.Error(t, a.Delete("key"))
+	// Remove persisted data directly to distinguish retaining the cache from
+	// reloading the original value after incorrectly invalidating the cache.
+	require.NoError(t, s.WorkflowStore.DeleteState(context.Background(), "run", "key"))
+	value, err = gorkflow.GetTyped[string](a, "key")
+	require.NoError(t, err)
+	require.Equal(t, "original", value)
+}
+
+func TestStateAccessorContextViewsShareCache(t *testing.T) {
+	s := &stateFailureStore{WorkflowStore: store.NewMemoryStore()}
+	a := gorkflow.NewStateAccessor("run", s)
+	ctx, cancel := context.WithCancel(context.Background())
+	first := gorkflow.WithStateAccessorContext(a, ctx)
+	second := gorkflow.WithStateAccessorContext(a, context.Background())
+	require.NoError(t, first.Set("key", "first"))
+	value, err := gorkflow.GetTyped[string](second, "key")
+	require.NoError(t, err)
+	require.Equal(t, "first", value)
+	cancel()
+	require.ErrorIs(t, first.Set("key", "cancelled"), context.Canceled)
+	require.NoError(t, second.Set("key", "second"))
+	value, err = gorkflow.GetTyped[string](first, "key")
+	require.NoError(t, err)
+	require.Equal(t, "second", value)
+	require.NoError(t, second.Delete("key"))
+	require.False(t, first.Has("key"))
+}
+
+func TestStateAccessorGetAllRefreshesCache(t *testing.T) {
+	s := store.NewMemoryStore()
+	a := gorkflow.NewStateAccessor("run", s)
+	require.NoError(t, a.Set("deleted", 1))
+	require.NoError(t, a.Set("retained", 2))
+	require.NoError(t, s.DeleteState(context.Background(), "run", "deleted"))
+	all, err := a.GetAll()
+	require.NoError(t, err)
+	require.False(t, a.Has("deleted"))
+	all["retained"][0] = '9'
+	value, err := gorkflow.GetTyped[int](a, "retained")
+	require.NoError(t, err)
+	require.Equal(t, 2, value)
+}
+
+func BenchmarkStateAccessorCachedGet(b *testing.B) {
+	a := gorkflow.NewStateAccessor("run", store.NewMemoryStore())
+	if err := a.Set("key", 42); err != nil {
+		b.Fatal(err)
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		var value int
+		for pb.Next() {
+			if err := a.Get("key", &value); err != nil {
+				b.Error(err)
+			}
+		}
+	})
+}
+
+func TestStateAccessorConcurrentViewsRemainCoherent(t *testing.T) {
+	s := store.NewMemoryStore()
+	a := gorkflow.NewStateAccessor("run", s)
+	var wg sync.WaitGroup
+	for worker := 0; worker < 8; worker++ {
+		wg.Add(1)
+		go func(worker int) {
+			defer wg.Done()
+			view := gorkflow.WithStateAccessorContext(a, context.Background())
+			for i := 0; i < 100; i++ {
+				if err := view.Set("key", worker*100+i); err != nil {
+					t.Error(err)
+					return
+				}
+				var value int
+				if err := view.Get("key", &value); err != nil {
+					t.Error(err)
+					return
+				}
+			}
+		}(worker)
+	}
+	wg.Wait()
+	cached, err := gorkflow.GetTyped[int](a, "key")
+	require.NoError(t, err)
+	persisted, err := s.LoadState(context.Background(), "run", "key")
+	require.NoError(t, err)
+	require.Equal(t, fmt.Sprint(cached), string(persisted))
+}
+
+func BenchmarkStateAccessorSet(b *testing.B) {
+	a := gorkflow.NewStateAccessor("run", store.NewMemoryStore())
+	b.ReportAllocs()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			if err := a.Set("key", 42); err != nil {
+				b.Error(err)
+			}
+		}
+	})
 }

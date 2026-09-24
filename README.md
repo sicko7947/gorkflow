@@ -63,17 +63,28 @@ func main() {
     )
 
     // Build workflow
-    wf, _ := gorkflow.NewWorkflow("calc", "Calculator").
+    wf, err := gorkflow.NewWorkflow("calc", "Calculator").
         Sequence(addStep).
         Build()
 
-    // Execute
-    store := store.NewMemoryStore()
-    eng := engine.NewEngine(store)
-    runID, _ := eng.StartWorkflow(context.Background(), wf, Input{A: 10, B: 5})
+    if err != nil {
+        panic(err)
+    }
+
+    // Execute and wait for completion
+    workflowStore := store.NewMemoryStore()
+    eng := engine.NewEngine(workflowStore)
+    runID, err := eng.StartWorkflow(context.Background(), wf, Input{A: 10, B: 5},
+        gorkflow.WithSynchronousExecution())
+    if err != nil {
+        panic(err)
+    }
 
     // Get result
-    run, _ := eng.GetRun(context.Background(), runID)
+    run, err := eng.GetRun(context.Background(), runID)
+    if err != nil {
+        panic(err)
+    }
     fmt.Printf("Status: %s, Output: %s\n", run.Status, run.Output)
 }
 ```
@@ -177,12 +188,12 @@ See [Storage Documentation](https://cai139193541.gitbook.io/gorkflow/storage/ove
 
 ## 📦 Requirements
 
-- **Go 1.21+** (uses generics)
+- **Go 1.26.0+** (see `go.mod`)
 - Optional: LibSQL client (for SQLite/Turso)
 
 ## 🤝 Contributing
 
-Contributions welcome! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+Contributions welcome! Run `go test ./...`, `go test -race ./...`, and `go vet ./...` before submitting changes.
 
 1. Fork the repository
 2. Create a feature branch

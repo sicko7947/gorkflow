@@ -187,124 +187,126 @@ func (a *stepAccessor) GetInput(stepID string, target interface{}) error {
 	return nil
 }
 
-// stateAccessor implements StateAccessor
+// stateAccessor implements StateAccessor. Views have independent contexts and
+// share the cache and operation lock so persistence and cache updates stay ordered.
 type stateAccessor struct {
 	runID string
 	store WorkflowStore
+	ctxMu sync.RWMutex
 	ctx   context.Context
+	state *stateAccessorCache
+}
+
+type stateAccessorCache struct {
 	mu    sync.RWMutex
 	cache map[string][]byte
 }
 
-// NewStateAccessor creates a new state accessor
+// NewStateAccessor creates a new state accessor.
 func NewStateAccessor(runID string, wfStore WorkflowStore) StateAccessor {
 	return &stateAccessor{
 		runID: runID,
 		store: wfStore,
 		ctx:   context.Background(),
-		cache: make(map[string][]byte),
+		state: &stateAccessorCache{cache: make(map[string][]byte)},
 	}
 }
 
+// WithStateAccessorContext returns a view with its own store-call context and
+// the same workflow state cache. Custom StateAccessor implementations are returned
+// unchanged.
+func WithStateAccessorContext(accessor StateAccessor, ctx context.Context) StateAccessor {
+	if a, ok := accessor.(*stateAccessor); ok {
+		return &stateAccessor{runID: a.runID, store: a.store, ctx: ctx, state: a.state}
+	}
+	return accessor
+}
+
+func (a *stateAccessor) context() context.Context {
+	a.ctxMu.RLock()
+	defer a.ctxMu.RUnlock()
+	return a.ctx
+}
+
 func (a *stateAccessor) Set(key string, value interface{}) error {
-	// Marshal value
 	data, err := json.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("failed to marshal state value for key %s: %w", key, err)
 	}
 
-	// Update cache and capture ctx under lock (ctx may be updated concurrently in parallel execution)
-	a.mu.Lock()
-	a.cache[key] = data
-	ctx := a.ctx
-	a.mu.Unlock()
-
-	// Persist to store
-	if err := a.store.SaveState(ctx, a.runID, key, data); err != nil {
+	a.state.mu.Lock()
+	defer a.state.mu.Unlock()
+	if err := a.store.SaveState(a.context(), a.runID, key, data); err != nil {
 		return fmt.Errorf("failed to save state for key %s: %w", key, err)
 	}
-
+	a.state.cache[key] = data
 	return nil
 }
 
 func (a *stateAccessor) Get(key string, target interface{}) error {
-	// Check cache first, capturing ctx atomically
-	a.mu.RLock()
-	data, ok := a.cache[key]
-	ctx := a.ctx
-	a.mu.RUnlock()
+	a.state.mu.RLock()
+	data, ok := a.state.cache[key]
+	a.state.mu.RUnlock()
 	if ok {
 		return json.Unmarshal(data, target)
 	}
 
-	// Load from store
-	data, err := a.store.LoadState(ctx, a.runID, key)
-	if err != nil {
-		return fmt.Errorf("failed to load state for key %s: %w", key, err)
+	// Recheck after obtaining the write lock: another view may have loaded or
+	// changed the value while this reader waited.
+	a.state.mu.Lock()
+	data, ok = a.state.cache[key]
+	if !ok {
+		var err error
+		data, err = a.store.LoadState(a.context(), a.runID, key)
+		if err != nil {
+			a.state.mu.Unlock()
+			return fmt.Errorf("failed to load state for key %s: %w", key, err)
+		}
+		a.state.cache[key] = data
 	}
+	a.state.mu.Unlock()
 
-	// Cache it
-	a.mu.Lock()
-	a.cache[key] = data
-	a.mu.Unlock()
-
-	// Unmarshal
 	if err := json.Unmarshal(data, target); err != nil {
 		return fmt.Errorf("failed to unmarshal state for key %s: %w", key, err)
 	}
-
 	return nil
 }
 
 func (a *stateAccessor) Delete(key string) error {
-	// Remove from cache and capture ctx under lock
-	a.mu.Lock()
-	delete(a.cache, key)
-	ctx := a.ctx
-	a.mu.Unlock()
-
-	// Delete from store
-	if err := a.store.DeleteState(ctx, a.runID, key); err != nil {
+	a.state.mu.Lock()
+	defer a.state.mu.Unlock()
+	if err := a.store.DeleteState(a.context(), a.runID, key); err != nil {
 		return fmt.Errorf("failed to delete state for key %s: %w", key, err)
 	}
-
+	delete(a.state.cache, key)
 	return nil
 }
 
 func (a *stateAccessor) Has(key string) bool {
-	// Check cache, capturing ctx atomically
-	a.mu.RLock()
-	_, ok := a.cache[key]
-	ctx := a.ctx
-	a.mu.RUnlock()
-	if ok {
+	a.state.mu.RLock()
+	defer a.state.mu.RUnlock()
+	if _, ok := a.state.cache[key]; ok {
 		return true
 	}
-
-	// Check store
-	_, err := a.store.LoadState(ctx, a.runID, key)
+	_, err := a.store.LoadState(a.context(), a.runID, key)
 	return err == nil
 }
 
 func (a *stateAccessor) GetAll() (map[string][]byte, error) {
-	// Capture ctx under lock before store call
-	a.mu.RLock()
-	ctx := a.ctx
-	a.mu.RUnlock()
-
-	// Get all from store
-	data, err := a.store.GetAllState(ctx, a.runID)
+	a.state.mu.Lock()
+	defer a.state.mu.Unlock()
+	data, err := a.store.GetAllState(a.context(), a.runID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get all state: %w", err)
 	}
 
-	// Update cache
-	a.mu.Lock()
+	// Replace the snapshot to remove deleted keys, and keep caller-owned bytes
+	// separate from the shared cache.
+	cache := make(map[string][]byte, len(data))
 	for k, v := range data {
-		a.cache[k] = v
+		cache[k] = append([]byte(nil), v...)
 	}
-	a.mu.Unlock()
-
+	a.state.cache = cache
 	return data, nil
 }
 
@@ -319,8 +321,8 @@ func SetStepAccessorCtx(accessor StepDataAccessor, ctx context.Context) {
 // Safe to call concurrently with other accessor methods.
 func SetStateAccessorCtx(accessor StateAccessor, ctx context.Context) {
 	if sa, ok := accessor.(*stateAccessor); ok {
-		sa.mu.Lock()
+		sa.ctxMu.Lock()
 		sa.ctx = ctx
-		sa.mu.Unlock()
+		sa.ctxMu.Unlock()
 	}
 }

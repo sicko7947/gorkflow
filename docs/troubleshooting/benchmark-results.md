@@ -1,6 +1,29 @@
 # Benchmark & Stress Test Results
 
-Baseline results captured on 2026-03-30, updated 2026-03-30 after correctness fixes. Re-run after significant changes to track regressions.
+## Local review: 2026-09-24
+
+Measured before and after the changes on Linux/amd64, AMD Ryzen 9 3950X (32 logical CPUs), `go1.27.0-X:nodwarf5`. These are local microbenchmarks, not production throughput guarantees.
+
+| Benchmark | Before | After | Allocation change |
+|-----------|-------:|------:|------------------:|
+| MemoryStore ListRuns, 1,000 runs with 4 KiB payloads, limit 10 | 1.26–1.32 ms | 131–139 µs | 4,680,260 → 55,048 B/op |
+| Cold ComputeLevels, 16-leaf fan-out (median of 3 runs) | 13,939 ns | 11,389 ns | 10,540 → 9,522 B/op |
+| Cold ComputeLevels, 100-node shortcut DAG (median of 3 runs) | 56,092 ns | 42,788 ns | 38,688 → 23,560 B/op |
+
+Limited queries now copy only returned runs. Graph traversal preallocates known-size storage and propagates levels in topological order, processing each edge once.
+
+Reproduce the focused measurements:
+
+```bash
+go test . -run '^$' -bench 'BenchmarkGraph_ComputeLevels_.*Cold$' -benchmem -count=3
+go test ./store -run '^$' -bench '^BenchmarkMemoryStore_ListRuns_Limited$' -benchmem -count=3
+```
+
+Engine cleanup removes a redundant semaphore and coordinator atomics. No net engine speedup is claimed: timings were noisy, and independent per-step state contexts add allocation cost to fix cancellation isolation. State writes and cache misses now serialize store access with cache updates for consistency. A single-run parallel-write microbenchmark increased from 481 to 571 ns/op (about 19%), with unchanged allocations; cached reads remained about 40 ns/op. Remote-store latency may increase contention within a run.
+
+## Historical baseline: 2026-03-30
+
+The following results predate the local review above. Re-run after significant changes to track regressions.
 
 **Environment:** linux/amd64, 32-core x86_64, Go 1.26.1
 
@@ -70,7 +93,7 @@ Package: `github.com/sicko7947/gorkflow/engine`
 | `Parallel_FanOut_16` | 102,282 | 55,772 | 503 |
 | `StartWorkflow_Async` | 12,287 | 6,320 | 60 |
 
-`Parallel_FanOut_4` at ~36 µs vs `Sequential_10Steps` at ~1.1 ms: parallel fan-out is ~30× faster than an equivalent sequential chain for independent work.
+These historical sequential measurements include a 1 ms completion-polling interval; the parallel measurements use synchronous execution. They also use different step counts, so they do not establish a parallel speedup. Current sequential benchmarks use synchronous execution to remove polling overhead.
 
 These numbers reflect true concurrent goroutine execution after the semaphore bug fix (previously the semaphore was capped at 1, serialising all goroutines). With real I/O-bound steps the speedup is proportional to step duration × fan-out width.
 

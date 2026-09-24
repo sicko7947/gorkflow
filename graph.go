@@ -120,8 +120,8 @@ func (g *ExecutionGraph) Validate() error {
 	}
 
 	// Check for cycles (simple DFS-based cycle detection)
-	visited := make(map[string]bool)
-	recStack := make(map[string]bool)
+	visited := make(map[string]bool, len(g.Nodes))
+	recStack := make(map[string]bool, len(g.Nodes))
 
 	for nodeID := range g.Nodes {
 		if !visited[nodeID] {
@@ -162,7 +162,7 @@ func (g *ExecutionGraph) hasCycle(nodeID string, visited, recStack map[string]bo
 
 // getReachableNodes returns all nodes reachable from the given start node
 func (g *ExecutionGraph) getReachableNodes(startID string) map[string]bool {
-	reachable := make(map[string]bool)
+	reachable := make(map[string]bool, len(g.Nodes))
 	g.dfsReachable(startID, reachable)
 	return reachable
 }
@@ -194,8 +194,8 @@ func (g *ExecutionGraph) TopologicalSort() ([]string, error) {
 		return nil, err
 	}
 
-	visited := make(map[string]bool)
-	stack := []string{}
+	visited := make(map[string]bool, len(g.Nodes))
+	stack := make([]string, 0, len(g.Nodes))
 
 	// Perform topological sort using DFS
 	var visit func(string) error
@@ -233,7 +233,7 @@ func (g *ExecutionGraph) TopologicalSort() ([]string, error) {
 	return stack, nil
 }
 
-// ComputeLevels groups steps into execution levels via BFS.
+// ComputeLevels groups steps by their longest dependency path from the entry point.
 // Steps at the same level can execute concurrently.
 func (g *ExecutionGraph) ComputeLevels() ([][]string, error) {
 	g.cacheMu.RLock()
@@ -244,29 +244,29 @@ func (g *ExecutionGraph) ComputeLevels() ([][]string, error) {
 	}
 	g.cacheMu.RUnlock()
 
-	if err := g.Validate(); err != nil {
+	order, err := g.TopologicalSort()
+	if err != nil {
 		return nil, err
 	}
-	levels := map[string]int{g.EntryPoint: 0}
-	queue := []string{g.EntryPoint}
+	levels := make(map[string]int, len(order))
 	maxLevel := 0
-	for len(queue) > 0 {
-		nodeID := queue[0]
-		queue = queue[1:]
+	// Topological order ensures every predecessor is final before visiting a
+	// node, so each edge is processed once even when paths have different lengths.
+	for _, nodeID := range order {
 		node := g.Nodes[nodeID]
 		for _, next := range node.Next {
 			l := levels[nodeID] + 1
-			if existing, ok := levels[next]; !ok || l > existing {
+			if l > levels[next] {
 				levels[next] = l
 				if l > maxLevel {
 					maxLevel = l
 				}
-				queue = append(queue, next)
 			}
 		}
 	}
 	result := make([][]string, maxLevel+1)
-	for nodeID, l := range levels {
+	for _, nodeID := range order {
+		l := levels[nodeID]
 		result[l] = append(result[l], nodeID)
 	}
 	g.cacheMu.Lock()

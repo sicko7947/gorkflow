@@ -4,7 +4,7 @@ Get started with Gorkflow by adding it to your Go project.
 
 ## Requirements
 
-- **Go 1.21 or higher** (Gorkflow uses Go generics extensively)
+- **Go 1.26.0 or higher** (as declared in `go.mod`)
 - A Go module-enabled project
 
 ## Install Gorkflow

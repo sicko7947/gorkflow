@@ -88,6 +88,24 @@ func deepCopyStepExecution(exec *gorkflow.StepExecution) *gorkflow.StepExecution
 		return nil
 	}
 	execCopy := *exec
+	if exec.StartedAt != nil {
+		t := *exec.StartedAt
+		execCopy.StartedAt = &t
+	}
+	if exec.CompletedAt != nil {
+		t := *exec.CompletedAt
+		execCopy.CompletedAt = &t
+	}
+	if exec.Error != nil {
+		errCopy := *exec.Error
+		if exec.Error.Details != nil {
+			errCopy.Details = make(map[string]any, len(exec.Error.Details))
+			for k, v := range exec.Error.Details {
+				errCopy.Details[k] = v
+			}
+		}
+		execCopy.Error = &errCopy
+	}
 	if exec.Input != nil {
 		execCopy.Input = make([]byte, len(exec.Input))
 		copy(execCopy.Input, exec.Input)
@@ -161,7 +179,7 @@ func (s *MemoryStore) ListRuns(ctx context.Context, filter gorkflow.RunFilter) (
 			continue
 		}
 
-		runs = append(runs, deepCopyRun(run))
+		runs = append(runs, run)
 	}
 
 	// Sort by created_at DESC to match LibSQL behavior
@@ -174,7 +192,13 @@ func (s *MemoryStore) ListRuns(ctx context.Context, filter gorkflow.RunFilter) (
 		runs = runs[:filter.Limit]
 	}
 
-	return runs, nil
+	// Copy only the selected runs while the read lock protects their contents.
+	// A separate result slice also avoids retaining runs excluded by the limit.
+	result := make([]*gorkflow.WorkflowRun, len(runs))
+	for i, run := range runs {
+		result[i] = deepCopyRun(run)
+	}
+	return result, nil
 }
 
 // Step execution operations
@@ -212,11 +236,15 @@ func (s *MemoryStore) UpdateStepExecution(ctx context.Context, exec *gorkflow.St
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.stepExecutions[exec.RunID]; !exists {
+	runExecs, exists := s.stepExecutions[exec.RunID]
+	if !exists {
+		return gorkflow.ErrStepExecutionNotFound
+	}
+	if _, exists := runExecs[exec.StepID]; !exists {
 		return gorkflow.ErrStepExecutionNotFound
 	}
 
-	s.stepExecutions[exec.RunID][exec.StepID] = deepCopyStepExecution(exec)
+	runExecs[exec.StepID] = deepCopyStepExecution(exec)
 	return nil
 }
 
@@ -350,4 +378,3 @@ func (s *MemoryStore) GetAllState(ctx context.Context, runID string) (map[string
 
 	return stateCopy, nil
 }
-

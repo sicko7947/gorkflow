@@ -65,3 +65,39 @@ func TestStepExecutionOrder(t *testing.T) {
 	assert.Equal(t, 1, execs[1].ExecutionIndex)
 	assert.Equal(t, 2, execs[2].ExecutionIndex)
 }
+
+func TestParallelStepExecutionIndices(t *testing.T) {
+	s := store.NewMemoryStore()
+	e := engine.NewEngine(s)
+	step := func(id string) gorkflow.StepExecutor {
+		return gorkflow.NewStep(id, id, func(ctx *gorkflow.StepContext, input any) (any, error) {
+			return input, nil
+		})
+	}
+	wf, err := gorkflow.NewWorkflow("parallel-order", "Parallel order").
+		ThenStep(step("entry")).
+		Parallel(step("left"), step("right"), step("middle")).
+		ThenStep(step("end")).Build()
+	require.NoError(t, err)
+
+	runID, err := e.StartWorkflow(context.Background(), wf, nil, gorkflow.WithSynchronousExecution())
+	require.NoError(t, err)
+	executions, err := e.GetStepExecutions(context.Background(), runID)
+	require.NoError(t, err)
+	require.Len(t, executions, 5)
+
+	seen := make(map[int]bool, len(executions))
+	for _, execution := range executions {
+		assert.False(t, seen[execution.ExecutionIndex], "duplicate execution index %d", execution.ExecutionIndex)
+		seen[execution.ExecutionIndex] = true
+		switch execution.StepID {
+		case "entry":
+			assert.Equal(t, 0, execution.ExecutionIndex)
+		case "end":
+			assert.Equal(t, 4, execution.ExecutionIndex)
+		default:
+			assert.GreaterOrEqual(t, execution.ExecutionIndex, 1)
+			assert.LessOrEqual(t, execution.ExecutionIndex, 3)
+		}
+	}
+}

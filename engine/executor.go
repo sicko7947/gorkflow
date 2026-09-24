@@ -120,7 +120,7 @@ func (e *Engine) executeStep(
 
 		stepCtx.Context = execCtx
 		gorkflow.SetStepAccessorCtx(outputs, execCtx)
-		gorkflow.SetStateAccessorCtx(state, execCtx)
+		stepCtx.State = gorkflow.WithStateAccessorContext(state, execCtx)
 		startTime := time.Now()
 
 		// Execute step (with panic recovery)

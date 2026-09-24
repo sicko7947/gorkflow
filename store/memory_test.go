@@ -590,3 +590,98 @@ func TestMemoryStore_ThreadSafety(t *testing.T) {
 		<-done
 	}
 }
+
+func TestMemoryStore_ListRuns_LimitedCopies(t *testing.T) {
+	s := NewMemoryStore()
+	ctx := context.Background()
+	for i, id := range []string{"old", "middle", "new"} {
+		if err := s.CreateRun(ctx, &gorkflow.WorkflowRun{
+			RunID: id, WorkflowID: "selected", CreatedAt: time.Unix(int64(i), 0),
+			Input: []byte(`{"value":1}`), Tags: map[string]string{"key": "original"},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.CreateRun(ctx, &gorkflow.WorkflowRun{
+		RunID: "other", WorkflowID: "other", CreatedAt: time.Unix(10, 0),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	runs, err := s.ListRuns(ctx, gorkflow.RunFilter{WorkflowID: "selected", Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 2 || runs[0].RunID != "new" || runs[1].RunID != "middle" {
+		t.Fatalf("expected newest two matching runs, got %+v", runs)
+	}
+	runs[0].WorkflowID = "changed"
+	runs[0].Input[0] = 'x'
+	runs[0].Tags["key"] = "changed"
+	stored, err := s.GetRun(ctx, "new")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.WorkflowID != "selected" || string(stored.Input) != `{"value":1}` || stored.Tags["key"] != "original" {
+		t.Fatalf("mutating list result changed stored run: %+v", stored)
+	}
+}
+
+func TestMemoryStore_StepExecutionCopyIsolation(t *testing.T) {
+	s := NewMemoryStore()
+	ctx := context.Background()
+	now := time.Now()
+	exec := &gorkflow.StepExecution{
+		RunID: "run", StepID: "step", StartedAt: &now, CompletedAt: &now,
+		Error: &gorkflow.StepError{Message: "original", Details: map[string]interface{}{"key": "original"}},
+	}
+	check := func() {
+		t.Helper()
+		got, err := s.GetStepExecution(ctx, "run", "step")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !got.StartedAt.Equal(now) || !got.CompletedAt.Equal(now) || got.Error.Message != "original" || got.Error.Details["key"] != "original" {
+			t.Fatalf("stored execution changed through caller pointers: %+v", got)
+		}
+	}
+	mutate := func(value *gorkflow.StepExecution) {
+		*value.StartedAt = now.Add(time.Hour)
+		*value.CompletedAt = now.Add(time.Hour)
+		value.Error.Message = "changed"
+		value.Error.Details["key"] = "changed"
+	}
+	// Keep expected time separate from the input pointer.
+	started, completed := now, now
+	exec.StartedAt, exec.CompletedAt = &started, &completed
+	if err := s.CreateStepExecution(ctx, exec); err != nil {
+		t.Fatal(err)
+	}
+	mutate(exec)
+	check()
+	got, err := s.GetStepExecution(ctx, "run", "step")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutate(got)
+	check()
+	listed, err := s.ListStepExecutions(ctx, "run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutate(listed[0])
+	check()
+}
+
+func TestMemoryStore_UpdateStepExecution_MissingStep(t *testing.T) {
+	s := NewMemoryStore()
+	ctx := context.Background()
+	if err := s.CreateRun(ctx, &gorkflow.WorkflowRun{RunID: "run"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdateStepExecution(ctx, &gorkflow.StepExecution{RunID: "run", StepID: "missing"}); err != gorkflow.ErrStepExecutionNotFound {
+		t.Fatalf("expected ErrStepExecutionNotFound, got %v", err)
+	}
+	if _, err := s.GetStepExecution(ctx, "run", "missing"); err != gorkflow.ErrStepExecutionNotFound {
+		t.Fatalf("update created missing step: %v", err)
+	}
+}

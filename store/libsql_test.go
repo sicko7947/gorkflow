@@ -343,3 +343,41 @@ func TestLibSQLStore(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+func TestLibSQL_UpdateStepExecution_RoundTrip(t *testing.T) {
+	s := newTestLibSQLStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	require.NoError(t, s.CreateRun(ctx, &workflow.WorkflowRun{
+		RunID: "roundtrip", WorkflowID: "workflow", CreatedAt: now, UpdatedAt: now,
+	}))
+	exec := &workflow.StepExecution{
+		RunID: "roundtrip", StepID: "step", CreatedAt: now, UpdatedAt: now,
+		Status: workflow.StepStatusPending,
+	}
+	require.NoError(t, s.CreateStepExecution(ctx, exec))
+	exec.Status = workflow.StepStatusFailed
+	exec.Input = []byte(`{"input":1}`)
+	exec.Output = []byte(`{"output":2}`)
+	exec.StartedAt = &now
+	completed := now.Add(time.Second)
+	exec.CompletedAt = &completed
+	exec.DurationMs = 1000
+	exec.Attempt = 2
+	exec.UpdatedAt = completed
+	exec.Error = &workflow.StepError{
+		Code: "FAILED", Message: "failure", Timestamp: completed, Attempt: 2,
+		Details: map[string]interface{}{"reason": "test"},
+	}
+	require.NoError(t, s.UpdateStepExecution(ctx, exec))
+	got, err := s.GetStepExecution(ctx, exec.RunID, exec.StepID)
+	require.NoError(t, err)
+	assert.Equal(t, exec, got)
+
+	exec.Error = nil
+	exec.Status = workflow.StepStatusCompleted
+	require.NoError(t, s.UpdateStepExecution(ctx, exec))
+	got, err = s.GetStepExecution(ctx, exec.RunID, exec.StepID)
+	require.NoError(t, err)
+	assert.Equal(t, exec, got)
+}

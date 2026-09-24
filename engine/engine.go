@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -176,7 +175,8 @@ func (e *Engine) executeWorkflow(ctx context.Context, wf *gorkflow.Workflow, run
 		totalSteps += len(level)
 	}
 
-	var completedSteps int64 // atomic counter
+	// Only the coordinator reads and updates progress.
+	completedSteps := 0
 
 	for _, level := range levels {
 		// Check for cancellation before each level
@@ -195,14 +195,14 @@ func (e *Engine) executeWorkflow(ctx context.Context, wf *gorkflow.Workflow, run
 				return e.failWorkflow(ctx, run, err)
 			}
 
-			stepInput, err := e.resolveStepInput(ctx, run, wf, stepID, atomic.LoadInt64(&completedSteps) == 0)
+			stepInput, err := e.resolveStepInput(ctx, run, wf, stepID, completedSteps == 0)
 			if err != nil {
 				return e.failWorkflow(ctx, run, err)
 			}
 
-			gorkflow.LogStepStarted(e.logger, run.RunID, stepID, step.GetName(), int(atomic.LoadInt64(&completedSteps))+1, totalSteps)
+			gorkflow.LogStepStarted(e.logger, run.RunID, stepID, step.GetName(), completedSteps+1, totalSteps)
 
-			result, err := e.executeStep(ctx, run, step, stepInput, state, wf.GetContext(), int(atomic.LoadInt64(&completedSteps)))
+			result, err := e.executeStep(ctx, run, step, stepInput, state, wf.GetContext(), completedSteps)
 			if err != nil {
 				if ctx.Err() != nil {
 					gorkflow.LogWorkflowCancelled(e.logger, run.RunID)
@@ -219,8 +219,8 @@ func (e *Engine) executeWorkflow(ctx context.Context, wf *gorkflow.Workflow, run
 				run.Output = result.Output
 			}
 
-			atomic.AddInt64(&completedSteps, 1)
-			progress := float64(atomic.LoadInt64(&completedSteps)) / float64(totalSteps)
+			completedSteps++
+			progress := float64(completedSteps) / float64(totalSteps)
 			run.Progress = progress
 			run.UpdatedAt = time.Now()
 			// Progress update is best-effort; a failure here doesn't stop execution.
@@ -238,9 +238,7 @@ func (e *Engine) executeWorkflow(ctx context.Context, wf *gorkflow.Workflow, run
 			}
 			resultsCh := make(chan stepResult, len(level))
 
-			sem := make(chan struct{}, len(level))
-
-			for _, stepID := range level {
+			for levelIndex, stepID := range level {
 				step, err := wf.GetStep(stepID)
 				if err != nil {
 					resultsCh <- stepResult{stepID: stepID, err: err}
@@ -253,11 +251,8 @@ func (e *Engine) executeWorkflow(ctx context.Context, wf *gorkflow.Workflow, run
 					continue
 				}
 
-				execIndex := int(atomic.LoadInt64(&completedSteps))
+				execIndex := completedSteps + levelIndex
 				go func(sID string, s gorkflow.StepExecutor, input []byte, idx int) {
-					sem <- struct{}{}
-					defer func() { <-sem }()
-
 					gorkflow.LogStepStarted(e.logger, run.RunID, sID, s.GetName(), idx+1, totalSteps)
 					result, err := e.executeStep(ctx, run, s, input, state, wf.GetContext(), idx)
 					resultsCh <- stepResult{stepID: sID, result: result, err: err}
@@ -278,11 +273,11 @@ func (e *Engine) executeWorkflow(ctx context.Context, wf *gorkflow.Workflow, run
 				} else if r.result != nil && r.result.Status == gorkflow.StepStatusCompleted {
 					run.Output = r.result.Output
 				}
-				atomic.AddInt64(&completedSteps, 1)
+				completedSteps++
 			}
 
 			// Single progress update after all steps in this level complete.
-			progress := float64(atomic.LoadInt64(&completedSteps)) / float64(totalSteps)
+			progress := float64(completedSteps) / float64(totalSteps)
 			run.Progress = progress
 			run.UpdatedAt = time.Now()
 			if err := e.store.UpdateRun(ctx, run); err != nil {

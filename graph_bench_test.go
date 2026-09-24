@@ -97,6 +97,27 @@ func BenchmarkGraph_Clone_10Nodes(b *testing.B) {
 	}
 }
 
+// Shortcuts reach nodes before their longest dependency path is discovered.
+func BenchmarkGraph_ComputeLevels_Shortcuts_100_Cold(b *testing.B) {
+	graph := buildLinearGraph(100)
+	for i := 2; i < 100; i++ {
+		if err := graph.AddEdge("step-0", fmt.Sprintf("step-%d", i)); err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Invalidate the caches without including graph construction in the timing.
+		if err := graph.SetEntryPoint("step-0"); err != nil {
+			b.Fatal(err)
+		}
+		if _, err := graph.ComputeLevels(); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func buildLinearGraph(n int) *gorkflow.ExecutionGraph {
 	graph := gorkflow.NewExecutionGraph()
 	for i := 0; i < n; i++ {
